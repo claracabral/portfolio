@@ -5,7 +5,7 @@ Olá! Sou Clara, estudante de Ciência de Dados e IA.
 
 ## Contato
 
-- LinkedIn: [Seu LinkedIn](https://www.linkedin.com/in/clara-cabral-lisboa-967605124/)
+- LinkedIn: [Clara Cabral Lisboa](https://www.linkedin.com/in/clara-cabral-lisboa-967605124/)
 - Email: ccabrallisboa@gmail.com
   
 ## Projetos
