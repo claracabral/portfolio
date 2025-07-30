@@ -10,5 +10,5 @@ Olá! Sou Clara, estudante de Ciência de Dados e IA.
   
 ## Projetos
 
-- 
+- EM CONSTRUÇÃO
 
