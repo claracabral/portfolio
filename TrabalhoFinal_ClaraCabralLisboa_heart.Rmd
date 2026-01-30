@@ -1,0 +1,670 @@
+---
+title: "Trabalho Final - Modelos de Regressão"
+author: "Clara Cabral Lisboa"
+data: "7 de abril de 2024"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+<style>
+p {
+    margin-bottom: 20px; /* Ajuste este valor conforme necessário */
+}
+
+h2, h3, h4 {
+    margin-top: 30px; /* Ajuste este valor conforme necessário */
+}
+</style>
+
+```{r Importando Bibliotecas, include=FALSE}
+library(tidyverse)
+library(corrgram)
+library(ggplot2)
+library(ggthemes)
+library(kableExtra)
+library(dplyr)
+library(lmtest)
+library(corrplot) # Para visualização da matriz de correlação
+library(car) # Para validação de pressupostos e análise
+library(caret)
+library(glmnet)
+library(readxl)
+library(MASS)
+library(cowplot)
+library(reshape2)
+library(Metrics)
+library(forecast)
+library(aplore3)
+library(pROC) 
+library(gridExtra)
+library(nnet)
+```
+
+
+## Contextualização do problema a ser resolvido
+
+### Base de dados
+Heart Attack Analysis & Prediction Dataset
+https://www.kaggle.com/datasets/rashikrahmanpritom/heart-attack-analysis-prediction-dataset/data
+
+
+Este conjunto de dados foi elaborado para abordar o problema da classificação de ataques cardíacos com base em diversas variáveis médicas e demográficas dos pacientes. 
+
+**Objetivo:**
+
+O objetivo principal é desenvolver um modelo de classificação utilizando regressão logística binomial, capaz de prever se um paciente tem uma maior ou menor probabilidade de sofrer um ataque cardíaco com base em suas características individuais.
+
+Este modelo será construído utilizando as variáveis médicas e demográficas disponíveis no conjunto de dados, visando identificar padrões e relações entre essas variáveis e o risco de ataque cardíaco. A aplicação de uma regressão logística binomial permitirá não apenas prever a probabilidade de ocorrência de um ataque cardíaco, mas também entender quais características dos pacientes têm maior influência nessa previsão. Isso pode fornecer insights valiosos para profissionais de saúde no desenvolvimento de estratégias de prevenção e tratamento personalizadas para pacientes em risco.
+
+**Importância:**
+
+Ao desenvolver um modelo de regressão logística binomial, podemos identificar quais variáveis têm maior impacto na probabilidade de ocorrência de um ataque cardíaco, fornecendo insights valiosos para profissionais de saúde. Isso pode permitir a identificação precoce de pacientes em maior risco, possibilitando a implementação de medidas preventivas, como mudanças no estilo de vida, monitoramento mais frequente e intervenções médicas específicas.
+
+Além disso, o desenvolvimento de um modelo de regressão logística eficaz pode contribuir significativamente para a medicina personalizada, permitindo que os profissionais de saúde tomem decisões mais informadas e individualizadas para cada paciente com base em seu perfil de risco específico. Isso pode levar a melhores resultados de saúde e uma redução significativa no ônus causado por doenças cardiovasculares na sociedade.
+
+**Variáveis do conjunto de dados:**
+
+- Age (Idade): Representa a idade do paciente.
+
+- Sex (Sexo): Indica o sexo do paciente, onde 1 representa masculino e 0 representa feminino.
+
+- Induced angina (Angina induzida pelo exercício): Uma variável binária que indica se o paciente experimenta angina induzida pelo exercício, sendo 1 para sim e 0 para não.
+
+- Num major vessels (Número de vasos principais): Representa o número de vasos sanguíneos principais coloridos por fluoroscopia, variando de 0 a 3.
+
+- Chest Pain (Tipo de dor no peito): Uma variável categórica que descreve o tipo de dor no peito relatada pelo paciente. Existem quatro valores possíveis:
+1: Angina típica
+2: Angina atípica
+3: Dor não anginal
+4: Assintomático
+
+- Resting blood pressure (Pressão arterial em repouso): Indica a pressão arterial do paciente em repouso, medida em milímetros de mercúrio (mm Hg).
+
+- Cholestoral (Colesterol): Representa o nível de colesterol do paciente, medido em miligramas por decilitro (mg/dl) através de um sensor BMI.
+
+- Fasting blood sugar (Açúcar no sangue em jejum): Uma variável binária que indica se o paciente tem níveis de açúcar no sangue em jejum superiores a 120 mg/dl, com 1 representando verdadeiro e 0 representando falso.
+
+- Resting electrocardiographic results (Resultados eletrocardiográficos em repouso): Uma variável categórica que descreve os resultados do eletrocardiograma (ECG) em repouso do paciente. Existem três valores possíveis:
+0: Normal
+1: Anormalidades na onda ST-T (inversões da onda T e/ou elevação ou depressão do segmento ST de > 0,05 mV)
+2: Mostrando hipertrofia ventricular esquerda provável ou definitiva pelos critérios de Estes.
+Maximum heart rate achieved (Máxima frequência cardíaca alcançada): Indica a máxima frequência cardíaca alcançada pelo paciente durante o teste de esforço.
+
+- Risk (Risco): A variável de destino que representa a probabilidade de um paciente sofrer um ataque cardíaco, onde:
+0: Indica uma menor chance de ataque cardíaco
+1: Indica uma maior chance de ataque cardíaco.
+
+
+```{r, Importando dados}
+dados_heart <- read.csv("C:/Users/ccabr/OneDrive/Área de Trabalho/Data science/Pos Estatistica CD/Modelos de regressão/Trabalho final/heart/heart.csv", header = TRUE)
+
+colnames(dados_heart) <- c("age", "sex", "chest_pain", "resting_blood_pressure", "cholestoral", "fasting_blood_sugar", "resting_ecg", "max_heart_rate", "induced_angina", "old_peak", "slope", "num_major_vessels", "thal_rate", "risk")
+
+summary(dados_heart)
+
+#dados_apple <- subset(dados_apple, select = -A_id)
+dados_heart <- na.omit(dados_heart)
+#dados_apple$Acidity <- as.numeric(dados_apple$Acidity)
+#summary(dados_apple)
+```
+
+
+## Análise descritiva
+
+```{r}
+age_desc<-dados_heart %>%
+  group_by(risk) %>%
+  summarise(
+    Variavel = "age",
+    Media = mean(age, na.rm = TRUE),
+    Mediana = median(age, na.rm = TRUE),
+    Desvio_Padrao = sd(age, na.rm = TRUE),
+    Minimo = min(age, na.rm = TRUE),
+    Maximo = max(age, na.rm = TRUE)
+  )
+
+sex_desc<-dados_heart %>%
+  group_by(risk) %>%
+  summarise(
+    Variavel = "sex",
+    Media = mean(sex, na.rm = TRUE),
+    Mediana = median(sex, na.rm = TRUE),
+    Desvio_Padrao = sd(sex, na.rm = TRUE),
+    Minimo = min(sex, na.rm = TRUE),
+    Maximo = max(sex, na.rm = TRUE)
+  )
+
+chest_pain_desc<-dados_heart %>%
+  group_by(risk) %>%
+  summarise(
+    Variavel = "chest_pain",
+    Media = mean(chest_pain, na.rm = TRUE),
+    Mediana = median(chest_pain, na.rm = TRUE),
+    Desvio_Padrao = sd(chest_pain, na.rm = TRUE),
+    Minimo = min(chest_pain, na.rm = TRUE),
+    Maximo = max(chest_pain, na.rm = TRUE)
+  )
+
+resting_bp_desc<-dados_heart %>%
+  group_by(risk) %>%
+  summarise(
+    Variavel = "resting_blood_pressure",
+    Media = mean(resting_blood_pressure, na.rm = TRUE),
+    Mediana = median(resting_blood_pressure, na.rm = TRUE),
+    Desvio_Padrao = sd(resting_blood_pressure, na.rm = TRUE),
+    Minimo = min(resting_blood_pressure, na.rm = TRUE),
+    Maximo = max(resting_blood_pressure, na.rm = TRUE)
+  )
+
+cholestoral_desc<-dados_heart %>%
+  group_by(risk) %>%
+  summarise(
+    Variavel = "cholestoral",
+    Media = mean(cholestoral, na.rm = TRUE),
+    Mediana = median(cholestoral, na.rm = TRUE),
+    Desvio_Padrao = sd(cholestoral, na.rm = TRUE),
+    Minimo = min(cholestoral, na.rm = TRUE),
+    Maximo = max(cholestoral, na.rm = TRUE)
+  )
+
+blood_sugar_desc<-dados_heart %>%
+  group_by(risk) %>%
+  summarise(
+    Variavel = "fasting_blood_sugar",
+    Media = mean(fasting_blood_sugar, na.rm = TRUE),
+    Mediana = median(fasting_blood_sugar, na.rm = TRUE),
+    Desvio_Padrao = sd(fasting_blood_sugar, na.rm = TRUE),
+    Minimo = min(fasting_blood_sugar, na.rm = TRUE),
+    Maximo = max(fasting_blood_sugar, na.rm = TRUE)
+  )
+
+ecg_desc<-dados_heart%>%
+  group_by(risk) %>%
+  summarise(
+    Variavel = "resting_ecg",
+    Media = mean(resting_ecg, na.rm = TRUE),
+    Mediana = median(resting_ecg, na.rm = TRUE),
+    Desvio_Padrao = sd(resting_ecg, na.rm = TRUE),
+    Minimo = min(resting_ecg, na.rm = TRUE),
+    Maximo = max(resting_ecg, na.rm = TRUE)
+  )
+
+max_heart_rate_desc<-dados_heart%>%
+  group_by(risk) %>%
+  summarise(
+    Variavel = "max_heart_rate",
+    Media = mean(max_heart_rate, na.rm = TRUE),
+    Mediana = median(max_heart_rate, na.rm = TRUE),
+    Desvio_Padrao = sd(max_heart_rate, na.rm = TRUE),
+    Minimo = min(max_heart_rate, na.rm = TRUE),
+    Maximo = max(max_heart_rate, na.rm = TRUE)
+  )
+
+induced_angina_desc<-dados_heart%>%
+  group_by(risk) %>%
+  summarise(
+    Variavel = "induced_angina",
+    Media = mean(induced_angina, na.rm = TRUE),
+    Mediana = median(induced_angina, na.rm = TRUE),
+    Desvio_Padrao = sd(induced_angina, na.rm = TRUE),
+    Minimo = min(induced_angina, na.rm = TRUE),
+    Maximo = max(induced_angina, na.rm = TRUE)
+  )
+
+old_peak_desc<-dados_heart%>%
+  group_by(risk) %>%
+  summarise(
+    Variavel = "old_peak",
+    Media = mean(old_peak, na.rm = TRUE),
+    Mediana = median(old_peak, na.rm = TRUE),
+    Desvio_Padrao = sd(old_peak, na.rm = TRUE),
+    Minimo = min(old_peak, na.rm = TRUE),
+    Maximo = max(old_peak, na.rm = TRUE)
+  )
+
+slope_desc<-dados_heart%>%
+  group_by(risk) %>%
+  summarise(
+    Variavel = "slope",
+    Media = mean(slope, na.rm = TRUE),
+    Mediana = median(slope, na.rm = TRUE),
+    Desvio_Padrao = sd(slope, na.rm = TRUE),
+    Minimo = min(slope, na.rm = TRUE),
+    Maximo = max(slope, na.rm = TRUE)
+  )
+
+num_major_vessels_desc<-dados_heart%>%
+  group_by(risk) %>%
+  summarise(
+    Variavel = "num_major_vessels",
+    Media = mean(num_major_vessels, na.rm = TRUE),
+    Mediana = median(num_major_vessels, na.rm = TRUE),
+    Desvio_Padrao = sd(num_major_vessels, na.rm = TRUE),
+    Minimo = min(num_major_vessels, na.rm = TRUE),
+    Maximo = max(num_major_vessels, na.rm = TRUE)
+  )
+
+thal_rate_desc<-dados_heart%>%
+  group_by(risk) %>%
+  summarise(
+    Variavel = "thal_rate",
+    Media = mean(thal_rate, na.rm = TRUE),
+    Mediana = median(thal_rate, na.rm = TRUE),
+    Desvio_Padrao = sd(thal_rate, na.rm = TRUE),
+    Minimo = min(thal_rate, na.rm = TRUE),
+    Maximo = max(thal_rate, na.rm = TRUE)
+  )
+
+
+tabela_final_heart <- bind_rows(age_desc, sex_desc, chest_pain_desc, resting_bp_desc, cholestoral_desc, blood_sugar_desc, ecg_desc, max_heart_rate_desc, induced_angina_desc, old_peak_desc, slope_desc, num_major_vessels_desc, thal_rate_desc)
+tabela_final_heart%>%
+  kable("html") %>%
+  kable_styling(full_width = FALSE) %>%
+  column_spec(1, bold = TRUE)
+```
+
+
+### Gráficos de boxploot para cada variável
+
+```{r}
+# Defina o tamanho do gráfico
+options(repr.plot.width = 18, repr.plot.height = 10)
+
+# Defina as variáveis numéricas
+numeric_features <- c("age", "sex", "chest_pain", "resting_blood_pressure", "cholestoral", "fasting_blood_sugar", "resting_ecg", "max_heart_rate", "induced_angina", "old_peak", "slope", "num_major_vessels", "thal_rate", "risk")
+
+dados_heart$risk <- factor(dados_heart$risk, levels = c("0", "1"))
+
+dados_long <- gather(dados_heart, key = "variable", value = "value", -risk)
+
+# Criando o boxplot com facet_wrap
+p <- ggplot(dados_long, aes(x = variable, y = value, fill = risk)) +
+  geom_boxplot() +
+  facet_wrap(~variable, scales = "free") +
+  theme(axis.text.x = element_blank())
+
+
+# Exiba o boxplot
+print(p)
+```
+
+
+## Modelo de regressão logística
+
+Modelo Completo
+
+```{r}
+dados_heart$risk <- as.factor(dados_heart$risk)
+
+set.seed(123)
+train_index <- createDataPartition(dados_heart$risk, p = 0.8, list = FALSE)
+dados_heart_treino <- dados_heart[train_index, ]
+dados_heart_teste <- dados_heart[-train_index, ]
+
+modelo_treino <- glm(risk ~ .,data = dados_heart_treino, family = binomial)
+summary(modelo_treino) 
+```
+
+
+## Stepwise
+
+```{r}
+# Realizar seleção de variáveis stepwise forward
+modelo_step <- step(modelo_treino)
+
+# Visualizar o modelo final
+print("MODELO ESCOLHIDO")
+summary(modelo_step)
+```
+
+#### Interpretação do stepwise
+
+**Modelo Final Selecionado:** O modelo final selecionado pelo procedimento stepwise inclui as seguintes variáveis explicativas: "sex", "chest_pain", "resting_ecg", "max_heart_rate", "induced_angina", "old_peak", "num_major_vessels" e "thal_rate". Isso significa que essas variáveis foram consideradas as mais relevantes para prever o risco de ataque cardíaco com base no critério de informação de Akaike (AIC).
+
+**Ajuste do Modelo:** O AIC é uma medida de ajuste do modelo que leva em consideração tanto o ajuste aos dados quanto a complexidade do modelo. Quanto menor o valor do AIC, melhor é o ajuste do modelo. O modelo final selecionado possui um AIC de 182.08, o que indica um bom equilíbrio entre ajuste e parcimônia.
+
+**Generalização e Validação:** Embora o modelo tenha sido selecionado com base nos dados de treinamento, é importante validar seu desempenho em um conjunto separado de dados de teste para garantir que ele seja capaz de generalizar bem para novos casos.
+
+**Parcimônia do Modelo:** O modelo final inclui oito variáveis explicativas, o que é um número razoável de variáveis e contribui para a interpretabilidade do modelo.
+No entanto, é importante garantir que o modelo não seja excessivamente complexo, o que poderia levar ao superajustamento.
+
+Em resumo, o modelo final selecionado pelo procedimento stepwise fornece insights valiosos sobre as variáveis mais importantes para prever o risco de ataque cardíaco, considerando sua interpretabilidade, ajuste aos dados e parcimônia. No entanto, é crucial validar seu desempenho em dados independentes antes de sua aplicação clínica.
+
+
+### Modelo ajustado com os dados de treino
+
+```{r}
+modelo_ajustado <- glm(formula = risk ~ sex + chest_pain + resting_ecg + max_heart_rate + 
+    induced_angina + old_peak + num_major_vessels + thal_rate, 
+    family = binomial, data = dados_heart_treino)
+```
+
+
+## Análise de pressupostos
+
+### Teste de Autocorrelação
+
+```{r}
+# Teste de autocorrelação (Ljung-box)
+Box.test(resid(modelo_ajustado), lag = 10, type = "Ljung-Box")
+```
+
+**Teste de autocorrelação (Box-Ljung):**
+Com um p-valor tão baixo (p < 2.2e-16), rejeitamos a hipótese nula de que não há autocorrelação nos resíduos. Uma autocorrelação significativa nos resíduos indica que o modelo não captura completamente a estrutura de dependência nos dados. Isso pode levar a intervalos de confiança muito estreitos ou largos demais. No contexto da regressão logística, a presença de autocorrelação de primeira ordem nos resíduos pode indicar que há padrões sistemáticos não capturados pelo modelo, o que pode levar a inferências enviesadas.
+
+
+### Teste de independência das observações
+
+```{r}
+##teste de  independência entre as observações (Durbin-Watson)
+dwtest(modelo_ajustado, alternative = "two.sided")
+```
+
+**Teste de independência das observações (Durbin-Watson):**
+No contexto deste modelo específico, a estatística de teste de Durbin-Watson de 1.0662 indica que há uma leve correlação positiva entre as observações dos resíduos, embora não seja tão forte. Um valor menor que 2 sugere que há alguma correlação entre as observações adjacentes, o que significa que elas não são completamente independentes. Portanto, isso sugere que o pressuposto de independência das observações pode não ser completamente atendido neste modelo. 
+
+
+### Teste de homocedasticidade
+```{r}
+# Teste de homocedasticidade (Breusch-Pagan)
+bptest(modelo_ajustado)
+```
+
+**Teste de homocedasticidade (Breusch-Pagan):**
+Com um p-valor abaixo do nível de significância usual de 0.05, rejeitamos a hipótese nula de homoscedasticidade. A presença de heteroscedasticidade nos resíduos indica que a variabilidade dos erros não é constante em todas as faixas dos valores previstos.. Isso pode ser problemático, pois os intervalos de confiança para os coeficientes do modelo podem ser muito amplos ou muito estreitos, levando a inferências incorretas sobre a relação entre as variáveis explicativas e a variável resposta.
+
+
+### Teste de multicolinearidade
+
+```{r}
+#Teste de multicolinearidade (VIF)
+vif_modelo <- vif(modelo_ajustado)
+print("VIF do modelo")
+print(vif_modelo)
+```
+
+**Teste de multicolinearidade (VIF):**
+Para todas as variáveis explicativas (sex, chest_pain, resting_ecg, max_heart_rate, induced_angina, old_peak, num_major_vessels e thal_rate), os valores de VIF estão próximos de 1. Isso indica a ausência de multicolinearidade, ou seja, não há correlação entre as variáveis explicativas.
+
+
+### Gráficos de resíduos
+
+```{r}
+# Gráfico de Resíduos vs. Valores Ajustados
+plot(modelo_ajustado, which=1)
+
+# Scatter plot de resíduos vs. variável independente
+plot(dados_heart_treino$sex, resid(modelo_ajustado), 
+     xlab = "sex",
+     ylab = "Resíduos",
+     main = "Gráfico de Resíduos vs. sex")
+
+# Adiciona uma linha horizontal em y = 0 para facilitar a visualização de resíduos
+abline(h = 0, col = "red")
+
+# Scatter plot de resíduos vs. variável independente
+plot(dados_heart_treino$chest_pain, resid(modelo_ajustado), 
+     xlab = "Chest Pain",
+     ylab = "Resíduos",
+     main = "Gráfico de Resíduos vs. Chest Pain")
+# Adiciona uma linha horizontal em y = 0 para facilitar a visualização de resíduos
+abline(h = 0, col = "red")
+
+# Scatter plot de resíduos vs. variável independente
+plot(dados_heart_treino$resting_ecg, resid(modelo_ajustado), 
+     xlab = "Resting ECG",
+     ylab = "Resíduos",
+     main = "Gráfico de Resíduos vs. Resting ECG")
+
+# Adiciona uma linha horizontal em y = 0 para facilitar a visualização de resíduos
+abline(h = 0, col = "red")
+
+# Scatter plot de resíduos vs. variável independente
+plot(dados_heart_treino$max_heart_rate, resid(modelo_ajustado), 
+     xlab = "Max Heart Rate",
+     ylab = "Resíduos",
+     main = "Gráfico de Resíduos vs. Max Heart Rate")
+
+# Adiciona uma linha horizontal em y = 0 para facilitar a visualização de resíduos
+abline(h = 0, col = "red")
+
+# Scatter plot de resíduos vs. variável independente
+plot(dados_heart_treino$induced_angina, resid(modelo_ajustado), 
+     xlab = "Induced Angina",
+     ylab = "Resíduos",
+     main = "Gráfico de Resíduos vs. Induced Angina")
+
+# Adiciona uma linha horizontal em y = 0 para facilitar a visualização de resíduos
+abline(h = 0, col = "red")
+
+# Scatter plot de resíduos vs. variável independente
+plot(dados_heart_treino$old_peak, resid(modelo_ajustado), 
+     xlab = "Old Peak",
+     ylab = "Resíduos",
+     main = "Gráfico de Resíduos vs. Old Peak")
+
+# Adiciona uma linha horizontal em y = 0 para facilitar a visualização de resíduos
+abline(h = 0, col = "red")
+
+# Scatter plot de resíduos vs. variável independente
+plot(dados_heart_treino$num_major_vessels, resid(modelo_ajustado), 
+     xlab = "Num Major Vessels",
+     ylab = "Resíduos",
+     main = "Gráfico de Resíduos vs. Num Major Vessels")
+
+# Adiciona uma linha horizontal em y = 0 para facilitar a visualização de resíduos
+abline(h = 0, col = "red")
+
+# Scatter plot de resíduos vs. variável independente
+plot(dados_heart_treino$thal_rate, resid(modelo_ajustado), 
+     xlab = "Thal Rate",
+     ylab = "Resíduos",
+     main = "Gráfico de Resíduos vs. Thal Rate")
+
+# Adiciona uma linha horizontal em y = 0 para facilitar a visualização de resíduos
+abline(h = 0, col = "red")
+```
+
+#### Interpretação dos gráficos de resíduos
+
+**Gráfico Residuals vs Fitted:** Observamos o padrão de duas linhas de observação, isso pode indicar que os resíduos estão tendendo a ser maiores ou menores do que o esperado, Essa situação sugere que o modelo pode não estar capturando toda a estrutura dos dados ou pode haver heterocedasticidade.
+
+**Gráfico Resíduos vx sex:** Os resíduos estão distribuídos aleatoriamente em torno de zero, isso sugere que a variável "sex" não está influenciando significativamente a magnitude dos resíduos.
+
+**Gráfico Resíduos vx Chest Pain:** Os resíduos estão distribuídos aleatoriamente em torno de zero, isso sugere que a variável "Chest Pain" não está influenciando significativamente a magnitude dos resíduos.
+
+**Gráfico Resíduos vx Resting ECG:** Os resíduos estão distribuídos aleatoriamente em torno de zero nas categorias 0 e 1, o que sugere que essas categorias não estão influenciando significativamente a magnitude dos resíduos. No entanto, para a categoria 2, há apenas três observações de resíduos, indicando uma amostra pequena para essa categoria. Isso pode dificultar a generalização dos resultados para essa categoria específica.
+
+**Gráfico Resíduos vx Max Heart Rate:** Os resíduos estão distribuídos aleatoriamente em torno de zero, isso sugere que a variável "Max Heart Rate" não está influenciando significativamente a magnitude dos resíduos.
+
+**Gráfico Resíduos vx Induced Angina:** Os resíduos estão distribuídos aleatoriamente em torno de zero, isso sugere que a variável "Induced Angina" não está influenciando significativamente a magnitude dos resíduos.
+
+**Gráfico Resíduos vx Old Peak:** Observa-se que a maioria dos resíduos está concentrada próxima ao eixo y, indicando uma distribuição mais densa nessa região. À medida que nos afastamos do eixo y, a dispersão dos resíduos diminui, sugerindo que a magnitude dos resíduos tende a diminuir à medida que a variável "Old Peak" aumenta. Isso sugere que o modelo pode não estar capturando adequadamente a variação nos dados para valores mais altos da variável "Old Peak", o que pode impactar a precisão das previsões nessa faixa de valores.
+
+**Gráfico Resíduos vx Num Major Vessels:** Os resíduos estão distribuídos aleatoriamente em torno de zero nas categorias 0 e 1, isso sugere que essas categorias não estão influenciando significativamente a magnitude dos resíduos. As categorias 2 e 3 possuem a maioria das observações abaixo de 0, o que sugere que essas categorias estão associadas a resíduos negativos, indicando uma tendência de subestimação dos valores observados em relação aos valores previstos pelo modelo.. A categoria 4 indicando uma amostra pequena para essa categoria. Isso pode dificultar a generalização dos resultados para essa categoria específica.
+
+**Gráfico Resíduos vx Thal Rate:** Os resíduos estão distribuídos aleatoriamente em torno de zero, isso sugere que a variável "Thal Rate" não está influenciando significativamente a magnitude dos resíduos. No entanto, na categoria 1 há poucas observações indicando uma amostra menor para essa categoria. Isso pode dificultar a generalização dos resultados para essa categoria específica.
+
+As variáveis que parecem influenciar significativamente os resíduos são: Resting ECG, Old Peak e Num Major Vessels.
+
+
+#### Conclusão de análise de pressupostos
+
+Os resultados das análises de pressupostos revelam algumas questões importantes sobre o modelo selecionado. Primeiramente, a presença de autocorrelação positiva nos resíduos que pode levar a estimativas enviesadas dos parâmetros do modelo e à subestimação da variabilidade dos resíduos.Além disso, a presença de heteroscedasticidade nos resíduos pode comprometer a eficácia do modelo, pois a heteroscedasticidade pode distorcer os intervalos de confiança e os testes de hipóteses, bem como afetar a precisão das previsões. Por outro lado, os baixos valores de VIF indicam a ausência de multicolinearidade significativa entre elas, o que é importante para evitar problemas de estimativa nos parâmetros do modelo. Portanto, mesmo que existam desafios relacionados à autocorrelação e à heteroscedasticidade, a ausência de multicolinearidade é uma vantagem significativa para a interpretação das relações entre as variáveis explicativas e a variável resposta.
+
+
+## Análise de resíduos por Pearson
+
+```{r}
+# Extrair os resíduos padronizados
+residuos <- resid(modelo_ajustado, type = "pearson")
+
+# Calcular os resíduos por Pearson
+residuos_pearson <- sqrt(abs(residuos))
+
+# Calcular a média dos resíduos de Pearson
+media_residuos <- mean(residuos_pearson)
+
+# Gráfico dos resíduos por Pearson
+plot(residuos_pearson, ylab = "Resíduos de Pearson", xlab = "Observação",
+     main = "Gráfico de Resíduos por Pearson")
+
+# Adicionar uma linha horizontal na média dos resíduos de Pearson
+abline(h = media_residuos, col = "red")
+
+summary(residuos_pearson)
+
+p_valor_deviance <- 1 - pchisq(deviance(modelo_ajustado), modelo_ajustado$df.residual)
+print("p_valor_deviance")
+p_valor_deviance
+```
+
+#### Interpretação de resíduos por Pearson
+
+Os resultados da análise de resíduos de Pearson mostram que os resíduos têm uma distribuição assimétrica positiva, com valores variando de 0.1673 a 2.2182. Isso indica que algumas observações possuem resíduos mais elevados do que a média, sugerindo possíveis discrepâncias entre os valores observados e os valores previstos pelo modelo. O Gráfico corrobora com essa interpretação, já que é visivel a presença de um intervalo maior de resíduos acima da média. O p-valor associado ao teste de deviance é muito alto (0.9998369), indicando que o modelo se ajusta bem aos dados.
+
+
+## Modelo final com os dados de teste
+
+```{r}
+modelo_final <- glm(formula = risk ~ sex + chest_pain + resting_ecg + max_heart_rate + 
+    induced_angina + old_peak + num_major_vessels + thal_rate, 
+    family = binomial, data = dados_heart_teste)
+```
+
+### Comparação dos modelos teste e treino
+
+```{r}
+print("Modelo final (teste)")
+summary(modelo_final)
+
+print("Modelo ajustado (treino)")
+summary(modelo_ajustado)
+```
+#### Comparando Teste e Treino (overfitting)
+
+Comparando os modelos de teste e treino, observa-se que algumas variáveis têm coeficientes significativamente diferentes entre os dois conjuntos de dados. Por exemplo, a variável "sex" não é significativa no modelo de teste, mas é altamente significativa no modelo de treino (p < 0.001). Além disso, algumas variáveis têm coeficientes com magnitudes diferentes entre os modelos, como "chest_pain" e "resting_ecg". Isso sugere que o modelo pode estar sofrendo de overfitting, pois está se ajustando muito bem aos dados de treino, mas não generaliza tão bem para os dados de teste. AIC também é menor no modelo de treino, o que indica um melhor ajuste aos dados de treino, mas pode não ser um bom indicador de generalização para novos dados. Isso destaca a importância de avaliar o desempenho do modelo em dados independentes para evitar overfitting e garantir uma melhor generalização.
+
+
+## Validação do modelo
+
+```{r}
+# Fazendo previsões com o modelo
+predictions <- predict(modelo_final, dados_heart_teste, type = "response")
+predictions_binary <- ifelse(predictions > 0.5, 1, 0)
+
+# Criando a matriz de confusão
+conf_matrix <- confusionMatrix(as.factor(ifelse(predictions > 0.5, 1, 0)), as.factor(dados_heart_teste$risk))
+
+roc_obj <- roc(dados_heart_teste$risk, predictions)
+roc_auc <- auc(roc_obj)
+
+# Imprimindo as métricas de desempenho
+cat("Matriz de Confusão:\n")
+print(conf_matrix)
+cat("Area under ROC curve:", roc_auc, "\n")
+```
+
+#### Interpretação
+
+No total, foram corretamente classificados 50 dos 60 casos (83,33% de precisão), com um intervalo de confiança de 95% entre 71,48% e 91,71%. A taxa de sensibilidade do modelo, ou seja, sua capacidade de identificar corretamente os casos positivos, foi de 77,78%, enquanto a especificidade, que mede a capacidade de identificar corretamente os casos negativos, foi de 87,88%. Isso indica que o modelo tem um bom desempenho tanto em identificar casos positivos quanto negativos. A área sob a curva ROC é de 0,90, o que sugere que o modelo tem uma boa capacidade de distinguir entre casos positivos e negativos.
+
+Os resultados da matriz de confusão mostram que o modelo ainda tem uma boa capacidade de prever corretamente os casos positivos e negativos, com uma precisão geral de 83,33%. A sensibilidade e especificidade do modelo também são relativamente altas, indicando que ele é capaz de identificar corretamente tanto os casos positivos quanto os negativos com uma taxa razoável de acerto. Portanto, apesar da preocupação com o overfitting, os resultados ainda são promissores na previsão de casos de risco de ataque cardíaco com base nas variáveis consideradas.
+
+
+```{r}
+roc_curve <- roc(dados_heart_teste$risk, predictions)
+plot(roc_curve, main = "Curva ROC", col = "blue")
+legend("bottomright", legend = paste("AUC =", round(auc(roc_curve), 4)), col = "blue", lwd = 1)
+```
+
+
+## ODDS
+
+```{r}
+# Calcular e interpretar o ODDS ratio para a variável sex
+odds_sex <- exp(coef(modelo_final)["sex"])
+odds_sex
+
+# Calcular e interpretar o ODDS ratio para a variável chest_pain
+odds_cp <- exp(coef(modelo_final)["chest_pain"])
+odds_cp
+
+# Calcular e interpretar o ODDS ratio para a variável resting_ecg
+odds_ecg <- exp(coef(modelo_final)["resting_ecg"])
+odds_ecg
+
+# Calcular e interpretar o ODDS ratio para a variável max_heart_rate
+odds_hr <- exp(coef(modelo_final)["max_heart_rate"])
+odds_hr
+
+# Calcular e interpretar o ODDS ratio para a variável induced_angina
+odds_ia <- exp(coef(modelo_final)["induced_angina"])
+odds_ia
+
+# Calcular e interpretar o ODDS ratio para a variável old_peak
+odds_op <- exp(coef(modelo_final)["old_peak"])
+odds_op
+
+# Calcular e interpretar o ODDS ratio para a variável num_major_vessels
+odds_mv <- exp(coef(modelo_final)["num_major_vessels"])
+odds_mv
+
+# Calcular e interpretar o ODDS ratio para a variável thal_rate
+odds_tr <- exp(coef(modelo_final)["thal_rate"])
+odds_tr
+```
+
+#### Interpretação das ODDS
+
+**Sexo (Sex):** As chances de um risco de ataque cardíaco são aproximadamente 0,74 vezes menores para pacientes do sexo feminino em comparação com pacientes do sexo masculino, mantendo todas as outras variáveis constantes.
+
+**Tipo de Dor no Peito (Chest Pain):** Pacientes que experimentam um tipo específico de dor no peito têm aproximadamente 2,25 vezes mais chances de ter um risco de ataque cardíaco em comparação com aqueles que não apresentam esse tipo específico de dor, mantendo todas as outras variáveis constantes.
+
+**Resultados Eletrocardiográficos em Repouso (Resting ECG):** Pacientes com certos resultados eletrocardiográficos em repouso têm aproximadamente 0,66 vezes as chances de um risco de ataque cardíaco em comparação com aqueles com resultados diferentes, mantendo todas as outras variáveis constantes.
+
+**Frequência Cardíaca Máxima Alcançada (Max Heart Rate):** Por unidade de aumento na frequência cardíaca máxima alcançada, as chances de um risco de ataque cardíaco aumentam em aproximadamente 0.98 vezes, mantendo todas as outras variáveis constantes.
+
+**Angina Induzida pelo Exercício (Induced Angina):** Pacientes que não experimentam angina induzida pelo exercício têm aproximadamente 0,13 vezes as chances de um risco de ataque cardíaco em comparação com aqueles que experimentam angina induzida pelo exercício, mantendo todas as outras variáveis constantes.
+
+**Pico Antigo (Old Peak):** Por unidade de aumento no pico antigo, as chances de um risco de ataque cardíaco diminuem em aproximadamente 0,41 vezes, mantendo todas as outras variáveis constantes.
+
+**Número de Vasos Principais (Num Major Vessels):** Pacientes com um número maior de vasos principais têm aproximadamente 0,32 vezes as chances de um risco de ataque cardíaco em comparação com aqueles com um número menor de vasos principais, mantendo todas as outras variáveis constantes.
+
+**Taxa Thal (Thal Rate):** Pacientes com uma determinada taxa thal têm aproximadamente 0,50 vezes as chances de um risco de ataque cardíaco em comparação com aqueles com taxas diferentes, mantendo todas as outras variáveis constantes.
+
+
+Com base nas odds ratios fornecidas, as ordem de variáveis relacionadas ao risco de ataque cardíaco na ordem da que mais impacta para a que menos impacta:
+
+1- Chest Pain (2.247981)
+
+2- Max Heart Rate (0.9885156)
+
+3- Sex (0.7394996)
+
+4- Resting ECG (0.6641941)
+
+5- Thal Rate (0.5029535)
+
+6- Old Peak (0.40757)
+
+7- Num Major Vessels (0.3177263)
+
+8- Induced Angina (0.1336747)
+
+
+## Considerações finais
+
+O modelo selecionado pelo método stepwise oferece insights valiosos sobre as variáveis mais relevantes para prever o risco de ataque cardíaco, no entanto, enfrentamos desafios significativos relacionados à autocorrelação e heterocedasticidade nos resíduos. A autocorrelação positiva e a heteroscedasticidade podem comprometer a confiabilidade das inferências e a precisão das previsões do modelo. Além disso, a comparação entre os modelos de teste e treino revelou disparidades nos coeficientes das variáveis, sugerindo a presença de overfitting. Isso significa que o modelo pode estar se ajustando muito bem aos dados de treinamento, mas não generaliza tão bem para novos casos, o que é crucial para sua aplicabilidade clínica. No entanto, apesar desses desafios, as previsões do modelo ainda demonstram resultados promissores, com uma precisão geral de 83,33% na classificação dos casos de risco de ataque cardíaco.
+
+Apesar dos desafios enfrentados, as previsões do modelo ainda demonstram resultados promissores, destacando seu potencial para aplicação clínica e contribuição para a previsão do risco de ataque cardíaco.
+
+
+*Aluna: Clara Cabral Lisboa*
