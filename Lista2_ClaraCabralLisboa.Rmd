@@ -1,0 +1,770 @@
+---
+title: "Lista 2 - Modelos de Regressão"
+author: "Clara Cabral Lisboa"
+data: "21 de março de 2024"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+<style>
+p {
+    margin-bottom: 20px; /* Ajuste este valor conforme necessário */
+}
+
+h2, h3, h4 {
+    margin-top: 30px; /* Ajuste este valor conforme necessário */
+}
+</style>
+
+```{r Importando Bibliotecas, include=FALSE}
+library(tidyverse)
+library(corrgram)
+library(ggplot2)
+library(ggthemes)
+library(kableExtra)
+library(dplyr)
+library(lmtest)
+library(corrplot) # Para visualização da matriz de correlação
+library(car) # Para validação de pressupostos e análise
+library(caret)
+library(glmnet)
+library(readxl)
+library(MASS)
+library(cowplot)
+library(reshape2)
+library(polynom)
+library(Metrics)
+library(forecast)
+library(aplore3)
+library(pROC) 
+library(gridExtra)
+library(nnet)
+```
+
+
+## Questão 1
+
+Determinar a probabilidade do usuário de comprar uma SUV, baseado em sua idade e salário. Utilizando a base de dados  SUV_Network_Ads_ex_1.csv
+
+```{r, Importando dados_suv}
+dados_suv<- read.csv("C:/Users/ccabr/OneDrive/Área de Trabalho/Data science/Pos Estatistica CD/Modelos de regressão/Listas/SUV_Network_Ads_ex_1.csv", header = TRUE)
+
+dados_suv <- subset(dados_suv, select = -User.ID)
+dados_suv <- subset(dados_suv, select = -Gender)
+
+head(dados_suv, 2)
+```
+
+
+### Análise descritiva
+
+```{r}
+Age_desc <- dados_suv %>%
+  group_by(Purchased) %>%
+  summarise(
+    Variavel = "Age",
+    Media = mean(Age, na.rm = TRUE),
+    Mediana = median(Age, na.rm = TRUE),
+    Desvio_Padrao = sd(Age, na.rm = TRUE),
+    Minimo = min(Age, na.rm = TRUE),
+    Maximo = max(Age, na.rm = TRUE)
+  )
+
+EstimatedSalary_desc<-dados_suv %>%
+  group_by(Purchased) %>%
+  summarise(
+    Variavel = "EstimatedSalary",
+    Media = mean(EstimatedSalary, na.rm = TRUE),
+    Mediana = median(EstimatedSalary, na.rm = TRUE),
+    Desvio_Padrao = sd(EstimatedSalary, na.rm = TRUE),
+    Minimo = min(EstimatedSalary, na.rm = TRUE),
+    Maximo = max(EstimatedSalary, na.rm = TRUE)
+  )
+
+
+tabela_final_suv <- bind_rows(Age_desc, EstimatedSalary_desc)
+tabela_final_suv%>%
+  kable("html") %>%
+  kable_styling(full_width = FALSE) %>%
+  column_spec(1, bold = TRUE)
+```
+
+
+#### Gráficos de boxplot para cada variável
+
+```{r}
+# Defina o tamanho do gráfico
+options(repr.plot.width = 18, repr.plot.height = 10)
+
+dados_suv$Purchased <- as.factor(dados_suv$Purchased)
+
+# Criando o boxplot para a variável 'age'
+grafico_age <- ggplot(dados_suv, aes(x = Purchased, y = Age, fill = Purchased)) +
+  geom_boxplot() +
+  scale_fill_brewer(palette = "Set3") +  # Especificando uma paleta de cores
+  labs(x = "Purchased", y = "Age") +  # Adicionando rótulos aos eixos
+  theme(axis.text.x = element_blank())  # Removendo os rótulos do eixo x
+
+# Criando o boxplot para a variável 'EstimatedSalary'
+grafico_salary <- ggplot(dados_suv, aes(x = Purchased, y = EstimatedSalary, fill = Purchased)) +
+  geom_boxplot() +
+  scale_fill_brewer(palette = "Set3") +  # Especificando uma paleta de cores
+  labs(x = "Purchased", y = "EstimatedSalary") +  # Adicionando rótulos aos eixos
+  theme(axis.text.x = element_blank())  # Removendo os rótulos do eixo x
+
+# Exibindo os gráficos lado a lado
+grid.arrange(grafico_age, grafico_salary, ncol = 2)
+```
+
+
+### Modelo de regressão logística
+
+```{r}
+set.seed(123)
+train_index <- createDataPartition(dados_suv$Purchased, p = 0.8, list = FALSE)
+dados_suv_treino <- dados_suv[train_index, ]
+dados_suv_teste <- dados_suv[-train_index, ]
+
+modelo_nulo <- glm(Purchased ~ 1, family = binomial, data = dados_suv_treino)
+summary(modelo_nulo)
+
+modelo_completo <- glm(Purchased ~ Age + EstimatedSalary,data = dados_suv_treino, family = binomial)
+summary(modelo_completo) 
+
+modelo_age <- glm(Purchased ~ Age,data = dados_suv_treino, family = binomial)
+summary(modelo_age) 
+
+modelo_salary <- glm(Purchased ~ EstimatedSalary,data = dados_suv_treino, family = binomial)
+summary(modelo_salary) 
+```
+
+
+```{r}
+# Comparação entre o modelo completo e o modelo nulo
+anova(modelo_completo, modelo_nulo, test = "Chisq")
+
+
+# Comparação entre o modelo completo e o modelo com a variável 'Age' como preditora
+anova(modelo_completo, modelo_age, test = "Chisq")
+
+# Comparação entre o modelo completo e o modelo com a variável 'EstimatedSalary' como preditora
+anova(modelo_completo, modelo_salary, test = "Chisq")
+```
+
+Para ambos os testes, os valores de Pr(>Chi) são muito baixos, indicando uma diferença significativa na deviance entre os modelos. Isso sugere que a inclusão das variáveis EstimatedSalary (no primeiro teste) e Age (no segundo teste) melhora significativamente o ajuste do modelo de regressão logística para prever a variável Purchased. Com base nessa análise, o modelo 1, que inclui todas as variáveis independentes disponíveis, foi selecionado como o modelo escolhido.
+
+
+### Análise de pressupostos
+
+```{r}
+# Teste de autocorrelação (Ljung-box)
+Box.test(resid(modelo_completo), lag = 10, type = "Ljung-Box")
+
+##teste de  independência entre as observações (Durbin-Watson)
+dwtest(modelo_completo, alternative = "two.sided")
+
+# Teste de homocedasticidade (Breusch-Pagan)
+bptest(modelo_completo)
+
+#Teste de multicolinearidade (VIF)
+vif_modelo <- vif(modelo_completo)
+print("VIF do modelo")
+print(vif_modelo)
+
+# Gráfico de Resíduos vs. Valores Ajustados
+plot(modelo_completo, which=1)
+
+# Scatter plot de resíduos vs. variável independente
+plot(dados_suv_treino$EstimatedSalary, resid(modelo_completo), 
+     xlab = "EstimatedSalary",
+     ylab = "Resíduos",
+     main = "Gráfico de Resíduos vs. EstimatedSalary")
+
+# Adiciona uma linha horizontal em y = 0 para facilitar a visualização de resíduos
+abline(h = 0, col = "red")
+
+# Scatter plot de resíduos vs. variável independente
+plot(dados_suv_treino$Age, resid(modelo_completo), 
+     xlab = "Age",
+     ylab = "Resíduos",
+     main = "Gráfico de Resíduos vs. Age")
+
+# Adiciona uma linha horizontal em y = 0 para facilitar a visualização de resíduos
+abline(h = 0, col = "red")
+```
+
+#### Interpretação do teste de autocorrelação:
+
+Em síntese, tanto o teste de Box-Ljung quanto o teste de Durbin-Watson indicam a ausência de autocorrelação significativa nos resíduos do modelo de regressão logística. Isso sugere que as previsões feitas pelo modelo são confiáveis, pois os resíduos não mostram padrões de autocorrelação que possam comprometer sua precisão. Em resumo, a falta de autocorrelação nos resíduos é um indicativo positivo da qualidade do modelo de regressão logística.
+
+
+#### Interpretação do teste de homocedasticidade:
+
+O teste de Breusch-Pagan aplicado aos resíduos do modelo de regressão logística mostrou um valor p muito baixo (<0.05), indicando uma forte evidência contra a hipótese nula de homocedasticidade. Isso sugere que os resíduos do modelo apresentam heterocedasticidade, o que significa que a variabilidade dos resíduos não é constante em diferentes níveis das variáveis independentes. Em resumo, o pressuposto de homocedasticidade não é satisfeito para o modelo de regressão logística.
+
+
+#### Interpretação do resultado de multicolinearidade do modelo
+
+Todas as variáveis tiveram valores entre próximos de 1, tanto no modelo completo quanto no modelo ajustado pelo Stepwise. Isso indica que não há problemas significativos de multicolinearidade no modelo.Isso sugere que as variáveis independentes estão contribuindo de forma única para a explicação da variabilidade na variável resposta.
+
+
+#### Interpretação dos gráficos da análise de resíduos:
+
+**Gráfico Residuals vs Fitted**: O gráfico mostra uma leve curva ascendente perto de x = 0, indicando uma tendência de subestimação dos valores da variável resposta para valores ajustados muito baixos. A presença de duas "linhas" de pontos sugere heterocedasticidade nos resíduos, com diferentes variações ao longo dos valores ajustados. Isso indica a necessidade de investigar a estrutura de variância dos resíduos e considerar possíveis transformações nos dados para lidar com essa questão.
+
+**Gráfico Residuals vs Age**: A concentração dos pontos de observação perto da linha y = 0 sugere que os resíduos estão distribuídos de forma aleatória em torno de zero, o que é um bom sinal. No entanto, a presença de duas partes distintas acima e abaixo da linha y = 0 indica a possibilidade de uma relação não linear entre a variável explicativa Idade e os resíduos. Isso sugere que o modelo pode estar subestimando ou superestimando sistematicamente os valores da variável resposta em determinados intervalos de idade.
+
+**Gráfico Residuals vs EstimatedSalary**: A dispersão dos pontos de observação em torno da linha y = 0 sugere uma distribuição aleatória dos resíduos em relação aos valores da variável Salário Estimado. Isso sugere que o modelo está capturando adequadamente a variação na variável resposta em relação ao Salário Estimado, sem mostrar tendências consistentes de subestimação ou superestimação dos valores da variável resposta. Portanto, o modelo parece estar se ajustando bem aos dados em relação a essa variável explicativa.
+
+
+#### Conclusão:
+
+Em síntese, os testes indicam que os resíduos do modelo de regressão logística são confiáveis devido à ausência de autocorrelação significativa e problemas de multicolinearidade. Entretanto, a presença de heterocedasticidade sugere que a variabilidade dos resíduos não é uniforme. Além disso, os gráficos de análise de resíduos sugerem uma possível relação não linear entre a idade e os resíduos, enquanto o modelo parece se ajustar bem em relação ao salário estimado.
+
+
+### Análise de resíduos por Pearson
+
+```{r}
+# Extrair os resíduos padronizados
+residuos <- resid(modelo_completo, type = "pearson")
+
+# Calcular os resíduos por Pearson
+residuos_pearson <- sqrt(abs(residuos))
+
+# Calcular a média dos resíduos de Pearson
+media_residuos <- mean(residuos_pearson)
+
+# Gráfico dos resíduos por Pearson
+plot(residuos_pearson, ylab = "Resíduos de Pearson", xlab = "Observação",
+     main = "Gráfico de Resíduos por Pearson")
+
+# Adicionar uma linha horizontal na média dos resíduos de Pearson
+abline(h = media_residuos, col = "red")
+
+summary(residuos_pearson)
+
+p_valor_deviance <- 1 - pchisq(deviance(modelo_completo), modelo_completo$df.residual)
+print("p_valor_deviance")
+p_valor_deviance
+```
+
+#### Interpretação resíduos de pearson
+
+A análise conjunta dos resultados e do gráfico dos resíduos de Pearson oferece insights valiosos sobre a performance e a confiabilidade do modelo de regressão logística. Ao examinarmos os resultados, observamos que a maioria dos resíduos de Pearson está concentrada em valores relativamente baixos, com a mediana e a média em torno de 0,60 e 0,68, respectivamente. Isso sugere que, em geral, as previsões do modelo estão próximas dos valores reais, pois a maioria dos resíduos é pequena. No entanto, é importante observar que alguns valores de resíduos são mais altos, com o valor máximo chegando a 2,70. Esses resíduos mais pronunciados podem indicar áreas onde o modelo tem dificuldade em fazer previsões precisas ou onde os dados estão influenciando o modelo de forma mais significativa.
+
+Ao examinar o gráfico dos resíduos de Pearson, observamos uma distribuição dos pontos em torno da linha y = 0.68 (média dos resíduos de pearson). A maioria das observações está concentrada em valores abaixo de 1,5, o que sugere que a maioria das previsões do modelo está relativamente próxima dos valores reais. No entanto, também observamos a presença d de observaçe alguns pontos de observação com valores de resíduos acima de 1,5. Esses pontos representam discrepâncias significativas entre as previsões do modelo e os valores reais nessas instâncias específicas. Essas discrepâncias ressaltam áreas onde o modelo pode não estar performando tão bem e indicam a necessidade de investigação adicional ou refinamento do modelo para melhorar sua precisão.
+
+Em resumo, a análise dos resíduos de Pearson oferece uma compreensão detalhada da distribuição e magnitude dos resíduos, ajudando na identificação de áreas onde o modelo pode ser aprimorado e na avaliação geral da performance do modelo de regressão logística.
+
+#### Interpretação do teste de resíduos Deviance
+
+Se o valor do teste para os resíduos de deviance é 0.9999, isso significa que a probabilidade de observar uma deviance residual tão grande ou maior do que a observada, sob a hipótese nula de que o modelo é correto, é baixa. Em outras palavras, não há evidências significativas para rejeitar a hipótese nula de que o modelo é adequado.
+
+Isso sugere que o modelo ajustado está bem ajustado aos dados, ou seja, a diferença entre o modelo completo e o modelo nulo não é estatisticamente significativa. Portanto, o modelo parece ser apropriado para a tarefa de previsão ou inferência em questão.
+
+
+### Validação do modelo
+
+```{r}
+modelo_teste <- glm(Purchased ~ .,data = dados_suv_teste, family = binomial)
+summary(modelo_teste) 
+```
+
+
+```{r}
+# Fazendo previsões com o modelo
+predictions <- predict(modelo_teste, dados_suv_teste, type = "response")
+predictions_binary <- ifelse(predictions > 0.5, 1, 0)
+
+# Criando a matriz de confusão
+conf_matrix <- confusionMatrix(as.factor(ifelse(predictions > 0.5, 1, 0)), as.factor(dados_suv_teste$Purchased))
+
+roc_obj <- roc(dados_suv_teste$Purchased, predictions)
+roc_auc <- auc(roc_obj)
+
+# Imprimindo as métricas de desempenho
+cat("Matriz de Confusão:\n")
+print(conf_matrix)
+cat("Area under ROC curve:", roc_auc, "\n")
+```
+
+#### Interpretação da validação do modelo
+
+Acurácia: A proporção de previsões corretas feitas pelo modelo é de aproximadamente 84.18%.
+
+Intervalo de confiança: O intervalo varia de 74.97% a 91.9%, o que significa que podemos ter 95% de confiança de que a acurácia real do modelo está dentro dessa faixa.
+
+Taxa de informação nula: é de 64.56%, indicando que se o modelo fosse simplesmente prever a classe mais comum em todos os casos, ele alcançaria uma acurácia de 64.17%.
+
+Valor-p [Acc > NIR]: um valor-p baixo (p<0.05) indica que o modelo é estatisticamente significativamente melhor do que uma previsão simples baseada na classe mais frequente, enquanto um valor-p alto sugere que o modelo pode não oferecer uma melhoria estatisticamente significativa em relação à previsão mais simples.
+
+Kappa: 0.6626 sugere uma concordância moderada entre as previsões do modelo e os dados reais.
+
+Teste de McNemar: O valor-p associado ao teste de McNemar neste caso é de 0.7728, o que não indica uma diferença significativa entre os erros tipo I e tipo II. Portanto, não há evidência de que o modelo tenha uma tendência a cometer mais erros de um determinado tipo em relação ao outro.
+
+Sensibilidade: indica que o modelo classificou corretamente cerca de 90.2% dos casos positivos.
+
+Especificidade:indica que o modelo classificou corretamente cerca de 75% dos casos negativos.
+
+Valor Preditivo Positivo: indica que cerca de 86.79% das observações previstas como positivas são realmente positivas.
+
+Valor Preditivo Negativo: indica que cerca de 80.77% das observações previstas como negativas são realmente negativas.
+
+Prevalência: sugere que cerca de 64.56% das observações são da classe positiva.
+
+Taxa de detecção: indica que aproximadamente 58.23% dos casos positivos foram corretamente detectados pelo modelo.
+
+Prevalência da detecção: sugere que aproximadamente 67.09% das observações foram classificadas como positivas pelo modelo.
+
+Acurácia Balanceada: 0.8260, o que indica um bom equilíbrio entre a taxa de detecção e a taxa de verdadeiros negativos.
+
+Classe Positiva: A classe positiva é a classe que estamos interessados em prever, que neste caso, é a classe 0.
+
+Área sob a curva ROC: Um valor de 0.94993 para a área sob a curva ROC indica que o modelo de regressão logística tem um excelente poder de discriminação entre as classes positivas e negativas, o que é um indicativo positivo do alto desempenho do modelo na classificação das observações.
+
+
+#### Conclusão da validação do modelo
+
+Os resultados da validação do modelo de regressão logística indicam que o modelo tem um bom desempenho geral na previsão da variável resposta. O modelo possui alta acurácia e sensibilidade, porém a especificidade é um pouco menor, sugerindo que o modelo pode ter alguma dificuldade em distinguir corretamente os casos negativos. A área sob a curva ROC é alta, indicando um excelente poder de discriminação entre as classes positivas e negativas. O teste de McNemar indica que não há evidência de que o modelo tenha uma tendência a cometer mais erros de um determinado tipo em relação ao outro. Em geral, os resultados sugerem que o modelo de regressão logística é útil para prever a variável resposta, mas ainda pode ser refinado para melhorar sua precisão e capacidade de distinguir entre as classes.
+
+
+```{r}
+roc_curve <- roc(dados_suv_teste$Purchased, predictions)
+plot(roc_curve, main = "Curva ROC", col = "blue")
+legend("bottomright", legend = paste("AUC =", round(auc(roc_curve), 4)), col = "blue", lwd = 1)
+```
+
+
+### ODDS
+
+```{r}
+# Calcular e interpretar o ODDS ratio para a variável Age
+odds_age <- exp(coef(modelo_teste)["Age"])
+odds_age
+
+# Calcular e interpretar o ODDS ratio para a variável EstimatedSalary
+odds_salary <- exp(coef(modelo_teste)["EstimatedSalary"])
+odds_salary
+```
+
+#### Interpretação ODDS
+
+Age: Um aumento de uma unidade na idade está associado a um aumento de aproximadamente 42.32% nas chances de ocorrência do evento, mantendo todas as outras variáveis constantes.
+
+EstimatedSalary: Um aumento de uma unidade no salário estimado está associado a um aumento muito pequeno, quase insignificante, de aproximadamente 0.0052% nas chances de ocorrência do evento, mantendo todas as outras variáveis constantes.
+
+Em resumo, enquanto a idade tem um impacto mais substancial nas chances de ocorrência do evento em comparação com o salário estimado. Isso sugere que, dentro do contexto do modelo, a idade é uma variável mais importante na determinação das chances de ocorrência do evento em comparação com o salário estimado. Portanto, ao considerar a influência dessas variáveis no resultado do modelo, a idade parece desempenhar um papel mais significativo do que o salário estimado.
+
+
+### Considerações finais Questão 1
+
+Com base nas análises realizadas, o modelo de regressão logística demonstra um desempenho satisfatório na previsão da variável resposta. Os testes estatísticos indicam que a inclusão das variáveis independentes melhorou significativamente o ajuste do modelo, enquanto a análise dos resíduos sugere que as previsões feitas pelo modelo são confiáveis, sem padrões significativos de autocorrelação e sem problemas de multicolinearidade. No entanto, foi observada heterocedasticidade nos resíduos, sugerindo que a variabilidade do modelo pode não ser uniforme. Além disso, a validação do modelo revela uma alta área sob a curva ROC, indicando que o modelo é excelente de em diferenciar entre as classes positivas e negativas. No geral, o modelo de regressão logística demonstra ser uma ferramenta eficaz na previsão da variável resposta, com uma alta capacidade de distinguir entre as classes positivas e negativas.
+
+
+
+## Questão 2
+
+Determine o impacto das variáveis ses e write, no tipo de programa (prog) dos alunos da base. (prog ~ses + wrie)
+
+```{r, Importando dados}
+dados_multi <- read.csv("C:/Users/ccabr/OneDrive/Área de Trabalho/Data science/Pos Estatistica CD/Modelos de regressão/Listas/dados_lista_2_multinominal-1.csv", header = TRUE)
+
+dados_multi <- subset(dados_multi, select = -X)
+dados_multi <- subset(dados_multi, select = -id)
+dados_multi <- subset(dados_multi, select = -female)
+dados_multi <- subset(dados_multi, select = -schtyp)
+dados_multi <- subset(dados_multi, select = -read)
+dados_multi <- subset(dados_multi, select = -math)
+dados_multi <- subset(dados_multi, select = -science)
+dados_multi <- subset(dados_multi, select = -socst)
+dados_multi <- subset(dados_multi, select = -honors)
+dados_multi <- subset(dados_multi, select = -awards)
+dados_multi <- subset(dados_multi, select = -cid)
+
+summary(dados_multi)
+```
+```{r}
+# Transformando a variável ses
+
+# Verifique os níveis das variáveis categóricas
+unique(dados_multi$ses)
+
+# Converter 'ses' para numérico
+dados_multi$ses <- as.numeric(factor(dados_multi$ses, levels = c("low", "middle", "high")))
+
+# Verificar se há NA após a conversão
+sum(is.na(dados_multi$ses))
+```
+
+
+### Análise descritiva
+
+```{r}
+ses_desc<-dados_multi %>%
+  group_by(prog) %>%
+  summarise(
+    Variavel = "ses",
+    Media = mean(ses, na.rm = TRUE),
+    Mediana = median(ses, na.rm = TRUE),
+    Desvio_Padrao = sd(ses, na.rm = TRUE),
+    Minimo = min(ses, na.rm = TRUE),
+    Maximo = max(ses, na.rm = TRUE)
+  )
+
+write_desc <- dados_multi %>%
+  group_by(prog) %>%
+  summarise(
+    Variavel = "Write",
+    Media = mean(write, na.rm = TRUE),
+    Mediana = median(write, na.rm = TRUE),
+    Desvio_Padrao = sd(write, na.rm = TRUE),
+    Minimo = min(write, na.rm = TRUE),
+    Maximo = max(write, na.rm = TRUE)
+  )
+
+tabela_final_suv <- bind_rows(ses_desc, write_desc)
+tabela_final_suv%>%
+  kable("html") %>%
+  kable_styling(full_width = FALSE) %>%
+  column_spec(1, bold = TRUE)
+```
+
+
+#### Gráficos de boxplot para cada variável
+
+```{r}
+# Defina o tamanho do gráfico
+options(repr.plot.width = 18, repr.plot.height = 10)
+
+# Criando o boxplot para a variável 'ses'
+p1 <- ggplot(dados_multi, aes(x = prog, y = ses, fill = prog)) +
+  geom_boxplot() +
+  scale_fill_brewer(palette = "Set3") +  # Especificando uma paleta de cores
+  labs(x = "prog", y = "ses") +  # Adicionando rótulos aos eixos
+  theme(axis.text.x = element_blank())  # Removendo os rótulos do eixo x
+
+# Criando o boxplot para a variável 'write'
+p2 <- ggplot(dados_multi, aes(x = prog, y = write, fill = prog)) +
+  geom_boxplot() +
+  scale_fill_brewer(palette = "Set3") +  # Especificando uma paleta de cores
+  labs(x = "prog", y = "write") +  # Adicionando rótulos aos eixos
+  theme(axis.text.x = element_blank())  # Removendo os rótulos do eixo x
+
+# Exibindo os gráficos lado a lado
+grid.arrange(p1, p2, ncol = 2)
+```
+
+```{r}
+# Transformando variável prog
+
+# Verifique os níveis das variáveis categóricas
+unique(dados_multi$prog)
+
+# Converter 'prog' para numérico
+dados_multi$prog <- as.numeric(factor(dados_multi$prog, levels = c("vocation", "general", "academic")))
+
+# Verificar se há NA após a conversão
+sum(is.na(dados_multi$prog))
+```
+
+
+### Modelo de regressão multinomial
+
+```{r}
+set.seed(123)
+train_index <- createDataPartition(dados_multi$prog, p = 0.8, list = FALSE)
+dados_multi_treino <- dados_multi[train_index, ]
+dados_multi_teste <- dados_multi[-train_index, ]
+
+modelo_nulo <- multinom(prog ~ 1,data = dados_multi_treino)
+summary(modelo_nulo) 
+
+modelo_completo <- multinom(prog ~ ses + write,data = dados_multi_treino)
+summary(modelo_completo) 
+
+modelo_ses <- multinom(prog ~ ses,data = dados_multi_treino)
+summary(modelo_ses) 
+
+modelo_write <- multinom(prog ~ write,data = dados_multi_treino)
+summary(modelo_write) 
+```
+
+#### Interpretação dos modelos
+
+O modelo completo tem o menor desvio residual (297.6436) e o menor AIC (309.6436), o que sugere um ajuste melhor em comparação com os outros modelos.
+No entanto, o modelo com apenas a variável 'write' como preditora (modelo_write) tem um desvio residual ligeiramente maior (302.9877) e um AIC ligeiramente maior (310.9877), mas ainda é uma opção viável.
+Portanto, com base nessas métricas, o modelo completo parece ser o melhor entre os modelos testados. No entanto, é sempre importante considerar o contexto do problema e a interpretação dos coeficientes ao selecionar o modelo mais apropriado.
+
+
+### Teste de razão de verossimilhança
+
+```{r}
+# Comparação entre o modelo completo e o modelo nulo
+anova(modelo_completo, modelo_nulo, test = "Chisq")
+
+# Comparação entre o modelo completo e o modelo com a variável 'Age' como preditora
+anova(modelo_completo, modelo_ses, test = "Chisq")
+
+# Comparação entre o modelo completo e o modelo com a variável 'EstimatedSalary' como preditora
+anova(modelo_completo, modelo_write, test = "Chisq")
+```
+
+No primeiro conjunto de resultados, o modelo_completo (que inclui 'ses' e 'write') é comparado ao modelo_nulo (somente intercepto). O teste indica que o modelo_completo é significativamente melhor que o modelo_nulo, pois o valor-p é muito baixo (8.14922e-06), o que sugere que a inclusão de 'ses' e 'write' é estatisticamente significativa.
+
+No segundo conjunto de resultados, o modelo_completo (que inclui 'ses' e 'write') é comparado ao modelo_ses (somente 'ses'). Novamente, o teste indica que o modelo_completo é significativamente melhor que o modelo_ses, com um valor-p muito baixo (3.404446e-05), o que sugere que a inclusão de 'write' melhora significativamente o ajuste do modelo.
+
+No terceiro conjunto de resultados, o modelo_completo (que inclui 'ses' e 'write') é comparado ao modelo_write (somente 'write'). Neste caso, o teste não indica uma melhoria significativa no ajuste do modelo, pois o valor-p é relativamente alto (0.06910854). Isso sugere que a inclusão de 'ses' não traz uma melhoria estatisticamente significativa no ajuste do modelo em comparação com o modelo que inclui apenas 'write'.
+
+Portanto, com base nos testes de razão de verossimilhança e na análise anterior dos modelos (feita através do AIC e residual deviance), podemos concluir que o modelo multinomial que inclui tanto 'ses' quanto 'write' é estatisticamente superior aos modelos que incluem apenas uma dessas variáveis ou nenhuma delas. No entanto, o modelo que inclui apenas a variável 'write' também pode ser considerado uma escolha alternativa, pois não há uma melhoria estatisticamente significativa no ajuste do modelo ao adicionar 'ses'.
+
+
+### Análise de pressupostos
+
+```{r}
+## Teste de  independência entre as observações (Durbin-Watson)
+dwtest(modelo_completo, alternative = "two.sided")
+
+# Teste de homocedasticidade (Breusch-Pagan)
+bptest(resid(modelo_completo) ~ ., data = dados_multi_treino)
+
+#Teste de multicolinearidade (VIF)
+vif_modelo <- vif(modelo_completo)
+print("VIF do modelo")
+print(vif_modelo)
+
+# Calcula os valores ajustados
+valores_ajustados <- fitted(modelo_completo)
+
+# Calcula os resíduos
+residuos <- resid(modelo_completo)
+
+# Plota o gráfico de resíduos vs valores ajustados
+plot(valores_ajustados, residuos, xlab = "Valores Ajustados", ylab = "Resíduos", main = "Gráfico de Resíduos vs. Valores Ajustados")
+abline(h = 0, col = "red")
+
+# Verifica os comprimentos
+length_residuos <- length(residuos)
+length_ses <- length(dados_multi_treino$ses)
+
+# Ajuste dos resíduos para ter o mesmo comprimento que os dados de entrada
+residuos_ajustados <- residuos[1:length_ses]
+
+# Scatter plot de resíduos vs. variável independente
+plot(dados_multi_treino$ses, residuos_ajustados, 
+     xlab = "EstimatedSalary",
+     ylab = "Resíduos",
+     main = "Gráfico de Resíduos vs. ses")
+
+# Adiciona uma linha horizontal em y = 0 para facilitar a visualização de resíduos
+abline(h = 0, col = "red")
+
+# Scatter plot de resíduos vs. variável independente
+plot(dados_multi_treino$write, residuos_ajustados, 
+     xlab = "Age",
+     ylab = "Resíduos",
+     main = "Gráfico de Resíduos vs. write")
+
+# Adiciona uma linha horizontal em y = 0 para facilitar a visualização de resíduos
+abline(h = 0, col = "red")
+```
+
+#### Interpretação do teste de autocorrelação:
+
+O resultado do teste Durbin-Watson possui o valor p de 0.2125, isso sugere que os resíduos não exibem um padrão significativo de autocorrelação.
+
+#### Interpretação do teste de homocedasticidade:
+
+O valor extremamente baixo do valor p (< 0.05) indica uma forte evidência contra a hipótese nula de homocedasticidade, sugerindo que os resíduos exibem heterocedasticidade. Isso significa que a variabilidade dos resíduos não é constante em diferentes níveis das variáveis independentes.
+
+#### Interpretação do resultado de multicolinearidade do modelo
+
+Valores de VIF maiores que 10 indicam multicolinearidade. Neste caso, a variável Write apresenta um VIF muito alto, sugerindo a presença de multicolinearidade. O aviso indicando "No intercept: vifs may not be sensible" sugere que a análise dos VIFs pode não ser completamente precisa devido à ausência de intercepto no modelo.
+
+Considerando que as variáveis ses e prog são fatores com apenas três níveis (1, 2 e 3), isso pode causar problemas ao calcular o VIF, já que o VIF é uma medida de colinearidade entre variáveis preditoras contínuas, não categóricas. Quando as variáveis são fatores, é comum tratar cada nível como uma variável binária (dummy) durante a modelagem. Isso significa que o VIF não é uma métrica relevante para essas variáveis.
+
+#### Interpretação dos gráficos da análise de resíduos:
+
+**Gráfico Residuals vs Fitted**:  sugere que pode haver uma relação não linear entre os resíduos e os valores ajustados. A presença de duas linhas distintas sugere heterocedasticidade, indicando que a variância dos resíduos não é constante em diferentes níveis de ajuste.
+
+**Gráfico Residuals vs ses**: mostra que os resíduos estão distribuídos de forma relativamente uniforme em torno de zero para cada nível da variável categórica "ses". As três linhas verticais indicam a separação entre os níveis da variável, sugerindo que não há padrões discerníveis nos resíduos em relação a essa variável.
+
+**Gráfico Residuals vs write**: indica uma relação linear entre os resíduos e os valores ajustados, com duas linhas distintas sugerindo heterocedasticidade.
+
+#### Conclusão:
+
+Em resumo, os testes estatísticos apontam para a presença de heterocedasticidade nos resíduos do modelo, sugerindo que a variabilidade dos erros não é constante em diferentes níveis das variáveis independentes. Os gráficos de análise de resíduos revelam possíveis relações não lineares e heterocedasticidade nos erros, destacando áreas que podem exigir ajustes no modelo.Essas questões devem ser consideradas ao interpretar e utilizar os resultados do modelo.
+
+
+### Análise de resíduos por Pearson
+
+```{r}
+# Extrair os resíduos padronizados
+residuos <- resid(modelo_completo, type = "pearson")
+
+# Calcular os resíduos por Pearson
+residuos_pearson <- sqrt(abs(residuos))
+
+# Calcular a média dos resíduos de Pearson
+media_residuos <- mean(residuos_pearson)
+
+# Gráfico dos resíduos por Pearson
+plot(residuos_pearson, ylab = "Resíduos de Pearson", xlab = "Observação",
+     main = "Gráfico de Resíduos por Pearson")
+
+# Adicionar uma linha horizontal na média dos resíduos de Pearson
+abline(h = media_residuos, col = "red")
+
+summary(residuos_pearson)
+
+# Verificar se deviance retorna um valor numérico
+dev <- deviance(modelo_completo)
+print("dev")
+print(dev)
+
+# Verificar se df.residual retorna um valor numérico
+df_resid <- nrow(dados_multi_treino) - length(coef(modelo_completo))
+
+# Calcular o p-valor da deviance
+p_valor_deviance <- 1 - pchisq(dev, df_resid)
+print("p valor deviance")
+print(p_valor_deviance)
+```
+
+#### Interpretação resíduos de pearson
+
+O padrão de dispersão dos pontos de observação sugere que os resíduos não estão distribuídos uniformemente em torno de zero. A presença de uma "separação" entre os resíduos em torno de y=0.6 e y=0.8 pode indicar que o modelo está tendendo a subestimar ou superestimar consistentemente os valores da variável resposta em determinados intervalos. Isso pode sugerir a presença de algum padrão não capturado pelo modelo ou a necessidade de uma transformação nos dados para melhorar o ajuste do modelo.
+
+#### Interpretação do teste de resíduos Deviance
+
+Um valor-p muito baixo (p<0.05) indica que há evidências significativas para rejeitar a hipótese nula de que o modelo é correto. Portanto, isso sugere que o modelo não se ajusta bem aos dados, ou seja, há uma discrepância significativa entre o modelo e os dados reais.
+
+
+### Validação do modelo
+
+**No arquivo html este trecho volta com os resultados de validação da questão 1, mas no arquivo rmd, rodando uma célula de cada vezz, esse trecho volta correto**
+
+```{r}
+modelo_teste <- multinom(prog ~ ses + write,data = dados_multi_teste)
+summary(modelo_teste) 
+```
+
+
+```{r}
+# Definindo os níveis manualmente para as variáveis de interesse
+nivel <- c("1", "2", "3")
+
+# Garantindo que as variáveis tenham os mesmos níveis
+predictions <- factor(predictions, levels = nivel)
+dados_multi_teste$prog <- factor(dados_multi_teste$prog, levels = nivel)
+
+#Matriz de confusão
+custom_confusionMatrix <- function(data, reference) {
+  # Verifica se data e reference são fatores
+  if (!is.factor(data) || !is.factor(reference)) {
+    stop("Os argumentos 'data' e 'reference' devem ser fatores.")
+  }
+  
+  # Obter níveis dos fatores
+  levels_data <- levels(data)
+  levels_reference <- levels(reference)
+  
+  # Verificar se os níveis são os mesmos
+  if (!identical(levels_data, levels_reference)) {
+    stop("Os fatores 'data' e 'reference' devem ter os mesmos níveis.")
+  }
+  
+  # Criar matriz de confusão manualmente
+  conf_matrix <- table(data, reference)
+  
+  return(conf_matrix)
+}
+
+# Convertendo as previsões para uma estrutura binária
+predictions_class2 <- predict(modelo_teste, newdata = dados_multi_teste, type = "prob")[, "2"]
+
+# Criando a curva ROC
+roc_curve <- multiclass.roc(response = dados_multi_teste$prog, predictor = as.numeric(predictions_class2))
+roc_auc <- auc(roc_obj)
+
+# Imprimindo as métricas de desempenho
+print(conf_matrix)
+cat("Area under ROC curve:", roc_auc, "\n")
+```
+
+#### Interpretação da validação do modelo
+
+Acurácia: O modelo tem uma taxa de acerto de 67.5%, o que significa que ele classifica corretamente cerca de 67.5% dos casos.
+
+Kappa: O coeficiente Kappa, que leva em conta as classificações corretas que poderiam ocorrer por acaso, é de 0.417. Um valor de Kappa próximo de 1 indica uma concordância quase perfeita entre as previsões do modelo e os valores reais.
+
+Teste de McNemar: O valor-p associado ao teste de McNemar é 0.01857, indicando uma diferença significativa entre os erros tipo I e tipo II.
+
+Sensibilidade e Especificidade: A sensibilidade (capacidade de detectar verdadeiros positivos) é alta para a Classe 1 e Classe 3, mas baixa para a Classe 2. A especificidade (capacidade de detectar verdadeiros negativos) é alta para a Classe 2, mas relativamente baixa para as Classes 1 e 3.
+
+Valores Preditivos: O valor preditivo positivo (probabilidade de uma previsão positiva estar correta) é maior para a Classe 3, enquanto que para a Classe 2 é "NaN" (não definido) devido à ausência de previsões corretas para essa classe. O valor preditivo negativo (probabilidade de uma previsão negativa estar correta) é alto para todas as classes.
+
+Área sob a Curva ROC: A área sob a curva ROC, que mede a capacidade discriminativa do modelo, é de 0.6397. Quanto mais próximo de 1, melhor é a capacidade do modelo de distinguir entre as classes positivas e negativas.
+
+#### Conclusão da validação do modelo
+
+O modelo demonstra uma performance aceitável, porém, revela áreas de possível aprimoramento, como a sensibilidade para a Classe 2 e a especificidade para as Classes 1 e 3. Esses resultados sugerem a necessidade de ajustes adicionais no modelo para garantir uma melhor capacidade de classificação em todas as classes.
+
+
+```{r}
+roc_curve <- multiclass.roc(response = dados_multi_teste$prog, predictor = as.numeric(predictions_class2))
+plot(roc_curve$rocs[[1]], col = "blue", main = "Curva ROC")
+legend("bottomright", legend = paste("AUC =", round(roc_auc, 4)), col = "blue", lwd = 1)
+```
+
+
+### ODDS
+
+Faça uma análise detalhada os odds em relação a probabilidade de cada tipo de programa, considerando todos os níveis.  
+
+```{r}
+# Obtenha os coeficientes do modelo
+coeficientes <- coef(modelo_teste)
+
+# Defina a classe de referência (por exemplo, classe 1)
+classe_referencia <- 1
+
+# Calcule os odds para cada classe em relação à classe de referência
+odds <- exp(coeficientes[-classe_referencia, ] - coeficientes[classe_referencia, ])
+
+# Adicione os nomes das classes
+nomes_classes <- colnames(odds)
+nomes_classes <- paste("Classe", nomes_classes)
+odds <- as.data.frame(odds)
+names(odds) <- nomes_classes
+
+# Visualize os odds
+print(odds)
+```
+
+
+### Interpretação ODDS
+
+**Interceptação (Classe 1):** o odds de pertencer à Classe 1 em relação à Classe de referência é de aproximadamente 0.14%. Isso significa que a probabilidade de pertencer à Classe 1 é muito baixa em comparação com a Classe de referência.
+
+**ses (Classe 2 e Classe 3):** Para a variável "ses", o odds associado a uma unidade de aumento em "ses" é de aproximadamente 78% vezes maior para a Classe 2 e a Classe 3 em relação à Classe de referência (Classe 1). Isso sugere que um aumento em "ses" aumenta a probabilidade de pertencer às Classes 2 e 3 em comparação com a Classe 1.
+
+**write (Classe 2 e Classe 3):** Da mesma forma, para a variável "write", o odds associado a uma unidade de aumento em "write" é de aproximadamente 12% vezes maior para a Classe 2 e a Classe 3 em relação à Classe de referência (Classe 1). Isso indica que um aumento em "write" aumenta a probabilidade de pertencer às Classes 2 e 3 em comparação com a Classe 1.
+
+Em resumo, com base nos odds calculados, parece que as variáveis "ses" e "write" têm um impacto significativo na probabilidade de pertencer às Classes 2 e 3 em comparação com a Classe 1. No entanto, é importante considerar outros fatores e realizar uma análise mais aprofundada para entender completamente a relação entre essas variáveis e os diferentes tipos de programa.
+
+
+
+### Conclusões finais Questão 2
+
+Com base na análise detalhada dos modelos de regressão multinomial, testes estatísticos e interpretação dos resultados, é possível concluir que o modelo completo, que inclui as variáveis 'ses' e 'write', é estatisticamente superior aos modelos que incluem apenas uma dessas variáveis ou nenhuma delas. Os testes de razão de verossimilhança indicam que a inclusão de ambas as variáveis melhora significativamente o ajuste do modelo em relação aos modelos mais simples. Além disso, os resultados dos testes de Durbin-Watson e homocedasticidade revelam padrões nos resíduos que podem influenciar o desempenho do modelo. Portanto, é importante considerar esses aspectos ao interpretar e usar os resultados do modelo.
+
+A análise dos odds sugere que as variáveis 'ses' e 'write' têm um impacto significativo na probabilidade de pertencer às Classes 2 e 3 em comparação com a Classe 1. No entanto, é crucial realizar uma análise mais aprofundada para entender completamente a relação entre essas variáveis e os diferentes tipos de programa.
+
+Em resumo, o modelo multinomial desenvolvido fornece insights valiosos sobre os fatores que influenciam a classificação em diferentes tipos de programa. No entanto, recomenda-se uma análise contínua e refinamentos adicionais para melhorar ainda mais o desempenho e a interpretação do modelo.

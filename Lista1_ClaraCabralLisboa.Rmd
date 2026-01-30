@@ -1,0 +1,668 @@
+---
+title: "Lista 1 - Modelos de Regressão"
+author: "Clara Cabral Lisboa"
+data: "14 de março de 2024"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+<style>
+p {
+    margin-bottom: 20px; /* Ajuste este valor conforme necessário */
+}
+
+h2, h3, h4 {
+    margin-top: 30px; /* Ajuste este valor conforme necessário */
+}
+</style>
+
+```{r Importando Bibliotecas, include=FALSE}
+library(tidyverse)
+library(corrgram)
+library(ggplot2)
+library(ggthemes)
+library(kableExtra)
+library(dplyr)
+library(lmtest)
+library(corrplot) # Para visualização da matriz de correlação
+library(car) # Para validação de pressupostos e análise
+library(caret)
+library(glmnet)
+library(readxl)
+library(MASS)
+library(cowplot)
+library(reshape2)
+library(polynom)
+library(Metrics)
+```
+
+
+## Questão 1
+
+Faça um modelo de regressão linear múltipla para predizer da melhor forma possível o preço dos automóveis.   preco_carro.csv
+
+```{r, Importando dados}
+dados_carro <- read.csv("C:/Users/ccabr/OneDrive/Área de Trabalho/Data science/Pos Estatistica CD/Modelos de regressão/Listas/preco_carro.csv", header = TRUE)
+
+dados_carro <- subset(dados_carro, select = -v.id)
+
+head(dados_carro, 2)
+```
+
+
+### Análise descritiva
+
+```{r}
+on.road.old_desc<-dados_carro %>%
+  summarise(
+    Variavel = "on.road.old",
+    Media = mean(on.road.old, na.rm = TRUE),
+    Mediana = median(on.road.old, na.rm = TRUE),
+    Desvio_Padrao = sd(on.road.old, na.rm = TRUE),
+    Minimo = min(on.road.old, na.rm = TRUE),
+    Maximo = max(on.road.old, na.rm = TRUE)
+  )
+
+on.road.now_desc<-dados_carro %>%
+  summarise(
+    Variavel = "on.road.now",
+    Media = mean(on.road.now, na.rm = TRUE),
+    Mediana = median(on.road.now, na.rm = TRUE),
+    Desvio_Padrao = sd(on.road.now, na.rm = TRUE),
+    Minimo = min(on.road.now, na.rm = TRUE),
+    Maximo = max(on.road.now, na.rm = TRUE)
+  )
+
+years_desc<-dados_carro %>%
+  summarise(
+    Variavel = "years",
+    Media = mean(years, na.rm = TRUE),
+    Mediana = median(years, na.rm = TRUE),
+    Desvio_Padrao = sd(years, na.rm = TRUE),
+    Minimo = min(years, na.rm = TRUE),
+    Maximo = max(years, na.rm = TRUE)
+  )
+
+rating_desc<-dados_carro %>%
+  summarise(
+    Variavel = "rating",
+    Media = mean(rating, na.rm = TRUE),
+    Mediana = median(rating, na.rm = TRUE),
+    Desvio_Padrao = sd(rating, na.rm = TRUE),
+    Minimo = min(rating, na.rm = TRUE),
+    Maximo = max(rating, na.rm = TRUE)
+  )
+
+km_desc<-dados_carro %>%
+  summarise(
+    Variavel = "km",
+    Media = mean(km, na.rm = TRUE),
+    Mediana = median(km, na.rm = TRUE),
+    Desvio_Padrao = sd(km, na.rm = TRUE),
+    Minimo = min(km, na.rm = TRUE),
+    Maximo = max(km, na.rm = TRUE)
+  )
+
+condition_desc<-dados_carro %>%
+  summarise(
+    Variavel = "condition",
+    Media = mean(condition, na.rm = TRUE),
+    Mediana = median(condition, na.rm = TRUE),
+    Desvio_Padrao = sd(condition, na.rm = TRUE),
+    Minimo = min(condition, na.rm = TRUE),
+    Maximo = max(condition, na.rm = TRUE)
+  )
+
+economy_desc<-dados_carro %>%
+  summarise(
+    Variavel = "economy",
+    Media = mean(economy, na.rm = TRUE),
+    Mediana = median(economy, na.rm = TRUE),
+    Desvio_Padrao = sd(economy, na.rm = TRUE),
+    Minimo = min(economy, na.rm = TRUE),
+    Maximo = max(economy, na.rm = TRUE)
+  )
+top.speed_desc<-dados_carro %>%
+  summarise(
+    Variavel = "top.speed",
+    Media = mean(top.speed, na.rm = TRUE),
+    Mediana = median(top.speed, na.rm = TRUE),
+    Desvio_Padrao = sd(top.speed, na.rm = TRUE),
+    Minimo = min(top.speed, na.rm = TRUE),
+    Maximo = max(top.speed, na.rm = TRUE)
+  )
+
+hp_desc<-dados_carro %>%
+  summarise(
+    Variavel = "hp",
+    Media = mean(hp, na.rm = TRUE),
+    Mediana = median(hp, na.rm = TRUE),
+    Desvio_Padrao = sd(hp, na.rm = TRUE),
+    Minimo = min(hp, na.rm = TRUE),
+    Maximo = max(hp, na.rm = TRUE)
+  )
+
+torque_desc<-dados_carro %>%
+  summarise(
+    Variavel = "torque",
+    Media = mean(torque, na.rm = TRUE),
+    Mediana = median(torque, na.rm = TRUE),
+    Desvio_Padrao = sd(torque, na.rm = TRUE),
+    Minimo = min(torque, na.rm = TRUE),
+    Maximo = max(torque, na.rm = TRUE)
+  )
+
+current.price_desc<-dados_carro %>%
+  summarise(
+    Variavel = "current.price",
+    Media = mean(current.price, na.rm = TRUE),
+    Mediana = median(current.price, na.rm = TRUE),
+    Desvio_Padrao = sd(current.price, na.rm = TRUE),
+    Minimo = min(current.price, na.rm = TRUE),
+    Maximo = max(current.price, na.rm = TRUE)
+  )
+
+
+tabela_final_carro <- bind_rows(on.road.old_desc, on.road.now_desc, years_desc, rating_desc, condition_desc, economy_desc, top.speed_desc, hp_desc, torque_desc, current.price_desc)
+tabela_final_carro%>%
+  kable("html") %>%
+  kable_styling(full_width = FALSE) %>%
+  column_spec(1, bold = TRUE)
+```
+
+
+#### Gráficos de boxploot para cada variável
+
+```{r}
+# Defina o tamanho do gráfico
+options(repr.plot.width = 18, repr.plot.height = 10)
+
+# Defina as variáveis numéricas
+numeric_features <- c("on.road.old", "on.road.now", "years", "km", "rating", 
+                      "condition", "economy", "top.speed", "hp", "torque", "current.price")
+
+# Crie o boxplot com facet_wrap
+p <- ggplot(melt(dados_carro[, numeric_features]), aes(x = variable, y = value)) +
+  geom_boxplot() +
+  facet_wrap(~variable, scales = "free") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Exiba o boxplot
+print(p)
+```
+
+
+### Calculo de correlação e covariância
+
+```{r}
+cor(dados_carro)
+corrgram(dados_carro, lower.panel=panel.shade,
+         upper.panel=panel.pie, text.panel=panel.txt,
+         main= "Corrograma")
+```
+
+#### Interpretação da correlação das seguintes variáveis com o current.price:
+
+**on.road.old**: *correlação positiva*, indicando que quanto maior o preço do veículo no ano de lançamento, maior o preço de revenda.
+
+**on.road.now**: *correlação positiva*, indicando que quanto maior o preço do veículo no ano atual, maior o preço de revenda.
+
+**rating**: correlação positiva muito fraca, indicando que quanto maior a classificação do veículo, maior tende a ser o preço de revenda, no entanto essa variável afeta muito pouco na diferença de preço.
+
+**condition**: correlação positiva fraca, indicando que veículos com condições melhores podem possuir o preço de revenda um pouco maior.
+________________________________________________________________________________________________________________
+
+**years**: correlação negativa fraca, indicando que veículos mais antigos tendem a ter menores preços de revenda.
+
+**km**: *correlação negativa forte*, indicando que quanto maior a quilometragem do veículo, menor o preço de revenda.
+
+**economy**: correlação negativa muito fraca, indicando a economia de combustível pode ter um impacto mínimo no preço de revenda do veículo.
+________________________________________________________________________________________________________________
+
+**top.speed**, **hp**, **torque**: correlações fracas, sugerindo que o desempenho não tem um impacto significativo no preço de revenda do veículo.
+
+
+### Modelo de regressão
+
+Modelo Completo
+
+```{r}
+set.seed(123)
+train_index <- createDataPartition(dados_carro$current.price, p = 0.8, list = FALSE)
+dados_carro_treino <- dados_carro[train_index, ]
+dados_carro_teste <- dados_carro[-train_index, ]
+
+modelo_carro <- lm(current.price ~ ., data = dados_carro_treino)
+summary(modelo_carro)
+```
+
+
+### Seleção de modelos utilizando stepwise
+
+```{r}
+stepwise_result <- step(modelo_carro)
+
+summary_model_stepwise <- summary(stepwise_result)
+mae_stepwise <- summary_model_stepwise$sigma
+mse_stepwise <- summary_model_stepwise$sigma^2
+aic_stepwise <- AIC(stepwise_result)
+bic_stepwise <- BIC(stepwise_result)
+r_squared_stepwise <- summary_model_stepwise$adj.r.squared
+
+```
+
+#### Ajuste do modelo
+
+O método Stepwise selecionou um subconjunto de variáveis que resultou em um modelo com um AIC (Critério de Informação de Akaike) de aproximadamente 14525.91. Isso indica que o modelo escolhido pelo Stepwise tem um bom ajuste aos dados em comparação com outros modelos considerados durante o processo de seleção de variáveis.
+
+#### Seleção de variáveis
+
+O modelo resultante do Stepwise incluiu as variáveis "on.road.old", "on.road.now", "years", "km" e "condition". A seleção dessas variáveis sugere que elas têm uma influência significativa no preço do carro e são consideradas importantes para explicar a variabilidade na variável de resposta.
+
+#### Interpretabilidade do modelo
+
+O modelo resultante é relativamente simples e fácil de interpretar, pois contém apenas cinco variáveis explicativas. Isso facilita a compreensão das relações entre as variáveis e o preço do carro, tornando-o adequado para apresentação e explicação em contextos acadêmicos ou profissionais.
+
+#### Generalização para novos dados:
+ 
+O modelo resultante do Stepwise é mais provável que generalize bem para novos dados, pois evita o overfitting ao selecionar apenas as variáveis mais relevantes. Isso é crucial para garantir que o modelo seja útil e aplicável a dados fora do conjunto de treinamento.
+
+#### Parcimônia do modelo
+
+O modelo resultante do Stepwise é mais parcimonioso em comparação com outras opções, pois inclui apenas as variáveis mais relevantes para explicar o preço do carro. Isso significa que o modelo é mais simples e contém menos variáveis, sem sacrificar significativamente o ajuste aos dados ou a capacidade de generalização.
+
+#### Conclusão do método Stepwise
+
+Com base nessas considerações, o modelo resultante do método Stepwise possui um bom ajuste aos dados, é interpretável, provavelmente generalizável para novos dados e parcimonioso, representando uma abordagem cuidadosa e robusta para sua análise de regressão múltipla.
+
+
+### Modelo ajustado
+
+```{r}
+modelo_carro_step <- lm(current.price ~ on.road.old+on.road.now+years+km+condition, data=dados_carro_teste)
+summary(modelo_carro_step)
+```
+
+
+### Análise de resíduos
+
+#### Resíduos modelo completo
+
+```{r}
+### Resíduos do modelo completo
+
+residuos_carro <- resid(modelo_carro)
+
+# Teste de normalidade dos resíduos (Shapiro-Wilk)
+shapiro.test(residuos_carro)
+
+# Teste de homocedasticidade (Breusch-Pagan)
+bptest(modelo_carro)
+
+# Gráfico de Resíduos vs. Valores Ajustados
+plot(modelo_carro, which=1)
+
+# Gráfico de Normalidade dos Resíduos
+plot(modelo_carro, which=2)
+```
+
+#### Resíduos modelo ajustado
+
+```{r}
+### Resíduos do modelo ajustado
+
+residuos_carro_step <- resid(modelo_carro_step)
+
+# Teste de normalidade dos resíduos (Shapiro-Wilk)
+shapiro.test(residuos_carro_step)
+
+# Teste de homocedasticidade (Breusch-Pagan)
+bptest(modelo_carro_step)
+
+# Gráfico de Resíduos vs. Valores Ajustados
+plot(modelo_carro_step, which=1)
+
+# Gráfico de Normalidade dos Resíduos
+plot(modelo_carro_step, which=2)
+```
+
+#### Interpretação do teste de normalidade dos resíduos:
+
+Temos uma forte evidência que os resíduos deste modelo não possuem distribuição normal (Shapiro-Wilk: p<0.05) em nenhum dos modelos observados, o que indica uma violação do pressuposto de normalidade de resíduos na análise de regressão.
+
+#### Interpretação do teste de homocedasticidade:
+
+Através do teste Breusch-Pagan, vimos que a variância dos resíduos não é constante em relação às variáveis independentes (Breusch-Pagan: p<0.05) em ambos os modelos, violando o pressuposto de homocedasticidade na análise de regressão.
+
+#### Interpretação dos gráficos da análise de resíduos:
+
+Gráfico Residuals vs Fitted: Este gráfico mostra os resíduos (diferenças entre os valores observados e os valores previstos pelo modelo) em relação às previsões ajustadas pelo modelo. Uma dispersão uniformemente distribuída das observações em torno de uma linha horizontal indica que os resíduos têm uma distribuição aleatória em relação às previsões. No entanto, é importante notar que, no modelo completo, podem ser observadas mais observações dispersas em relação à linha horizontal, representadas por uma maior densidade de pontos no gráfico. Isso sugere uma maior variação nos resíduos em comparação com o modelo mais parcimonioso. A posição da linha horizontal em relação ao centro do gráfico pode indicar um viés sistemático nas previsões do modelo, com uma linha ligeiramente abaixo do centro sugerindo uma tendência de subestimação ou superestimação sistemática em uma faixa de valores preditores.
+
+Gráfico Q-Q Residuals: Este gráfico Q-Q (quantile-quantile) compara os quantis dos resíduos com os quantis de uma distribuição normal teórica. Uma linha diagonal idealmente reta sugeriria que os resíduos seguem uma distribuição normal. A presença de uma curvatura ou desvio da linha indica desvios da normalidade. É relevante observar que, no modelo completo, pode-se notar uma curvatura mais pronunciada ou desvio da linha diagonal, sugerindo uma maior distorção em relação à normalidade quando comparado ao modelo mais parcimonioso. A estabilização da curva no final do gráfico sugere que os resíduos tendem a se aproximar da normalidade nas extremidades da distribuição, um padrão que pode ser observado em ambos os modelos.
+
+
+#### Conclusão:
+
+Esses resultados indicam que ambos os modelos de regressão múltipla (o modelo completo e o ajustado pelo stepwise) podem ter algumas violações dos pressupostos básicos de uma análise de regressão (normalidade dos resíduos e homocedasticidade), o que pode afetar a validade das inferências feitas com base nesses modelo. É importante considerar essas limitações ao interpretar os resultados do modelo e suas conclusões. Dependendo do contexto, podem ser necessários ajustes ou considerações adicionais para lidar com essas violações.
+Violando a normalidade dos resíduos, as estimativas dos parâmetros do modelo podem estar enviesadas, afetando a precisão das inferências. Além disso, a falta de homocedasticidade sugere que a variância dos erros não é constante, o que pode levar a estimativas imprecisas e intervalos de confiança incorretos.
+
+
+
+### Análise de multicolinearidade
+
+```{r}
+#VIF modelo completo
+vif_completo <- vif(modelo_carro)
+print("VIF do modelo completo")
+print(vif_completo)
+
+#VIF modelo ajustado
+vif_ajustado <- vif(modelo_carro_step)
+print("VIF do modelo ajustado")
+print(vif_ajustado)
+```
+
+#### Interpretação do resultado de multicolinearidade do modelo
+
+Todas as variáveis tiveram valores entre próximos de 1, tanto no modelo completo quanto no modelo ajustado pelo Stepwise. Isso indica que não há problemas significativos de multicolinearidade no modelo.
+
+Valores de VIF abaixo de 5 é considerado aceitável; valores de VIF entre 5 e 10 são considerados preocupantes; Valores de VIF acima de 10 indicam alta multicolinearidade.
+
+
+### Análise de outlier
+
+```{r}
+#outliers modelo completo
+teste_outliers_completo <- outlierTest(modelo_carro)
+
+# Como no outlierTest o resultado do Bonferroni foi NA, a correção foi feita dessa forma:
+outliers_bonferroni_completo <- which(teste_outliers_completo$bonferroni < 0.05)
+
+outliers_bonferroni_completo
+
+# Após essa correção o resultado são as posições dos outliers, e se for não há outliers 
+
+###############################
+#outliers modelo ajustado
+teste_outliers_step <- outlierTest(modelo_carro_step)
+outliers_bonferroni_step <- which(teste_outliers_step$bonferroni < 0.05)
+
+outliers_bonferroni_step
+```
+
+#### Interpretação da análise de outliers
+
+O no teste de outliers, após a correção de Bonferroni o resultado foi integer(0). Isso indica que não foram encontradas observações que sejam consideradas outliers significativos com um nível de significância de 0.05. Essa correção de Bonferroni controla o erro global do tipo I quando realizamos múltiplos testes simultaneamente. Além disso, nos gráficos da análise descritiva também não foram encontrados outliers. Dessa forma podemos interpretar que não existem observações extremas que tenham uma influência significativa sobre os parâmetros do modelo. Isso pode indicar que o modelo está menos sujeito a ser distorcido por valores atípicos.
+
+A ausência de outliers também pode indicar uma maior robustez do modelo. A robustez de um modelo se refere à sua capacidade de fornecer estimativas precisas mesmo na presença de dados contaminados ou não conformes. Isso significa que o modelo pode oferecer estimativas estáveis e confiáveis dos parâmetros mesmo em situações atípicas.
+
+Além isso, como os outliers podem distorcer os coeficientes do modelo, a ausência de outliers torna a interpretação dos coeficientes do modelo mais direta e confiável. 
+
+
+### Considerações finais Questão 1
+
+Com base nos resultados alcançados no modelo completo e no modelo ajustado pelo stepwise observamos que as hipóteses de normalidade dos resíduos e de homocedasticidade não foram atendidas em nenhum dos casos. Por outro lado, não foram identificados outliers nem multicolinearidade em nenhum dos conjuntos de dados analisados. No entanto, ao comparar ambos os modelos, é possível perceber que um deles é mais parcimonioso (o modelo ajustado pelo stepwise).
+
+A conclusão é que cada abordagem, seja ela o modelo completo ou o modelo mais parcimonioso selecionado pelo stepwise, apresenta vantagens e desvantagens distintas. Para escolher entre esses modelos, é necessário realizar uma avaliação minuciosa de todos os aspectos relevantes. Isso inclui examinar as métricas de desempenho de cada modelo, como a precisão das previsões e a capacidade de explicar a variabilidade dos dados. Além disso, é fundamental considerar se os resíduos dos modelos atendem às hipóteses estatísticas necessárias, como a normalidade e homocedasticidade dos resíduos. Por fim, a parcimônia do modelo, ou seja, sua capacidade de fornecer uma explicação adequada dos dados com o menor número possível de variáveis, também deve ser considerada. Portanto, a escolha do modelo mais apropriado depende de uma avaliação cuidadosa de todos esses fatores para garantir uma análise robusta e confiável.
+
+
+
+## Questão 2
+
+Crie um modelo polinomial para predizer o salário. Position_Salaries_v1.csv
+
+```{r}
+dados_salarios <- read.csv("C:/Users/ccabr/OneDrive/Área de Trabalho/Data science/Pos Estatistica CD/Modelos de regressão/Listas/Position_Salaries_v1.csv", header = TRUE)
+
+head(dados_salarios, 2)
+```
+
+### Análise descritiva
+
+```{r}
+tempo_na_empresa_desc<-dados_salarios %>%
+  summarise(
+    Variavel = "tempo_na_empresa",
+    Media = mean(tempo_na_empresa, na.rm = TRUE),
+    Mediana = median(tempo_na_empresa, na.rm = TRUE),
+    Desvio_Padrao = sd(tempo_na_empresa, na.rm = TRUE),
+    Minimo = min(tempo_na_empresa, na.rm = TRUE),
+    Maximo = max(tempo_na_empresa, na.rm = TRUE)
+  )
+
+nivel_na_empresa_desc<-dados_salarios %>%
+  summarise(
+    Variavel = "nivel_na_empresa",
+    Media = mean(nivel_na_empresa, na.rm = TRUE),
+    Mediana = median(nivel_na_empresa, na.rm = TRUE),
+    Desvio_Padrao = sd(nivel_na_empresa, na.rm = TRUE),
+    Minimo = min(nivel_na_empresa, na.rm = TRUE),
+    Maximo = max(nivel_na_empresa, na.rm = TRUE)
+  )
+
+salario_em_reais_desc<-dados_carro %>%
+  summarise(
+    Variavel = "salario_em_reais",
+    Media = mean(years, na.rm = TRUE),
+    Mediana = median(years, na.rm = TRUE),
+    Desvio_Padrao = sd(years, na.rm = TRUE),
+    Minimo = min(years, na.rm = TRUE),
+    Maximo = max(years, na.rm = TRUE)
+  )
+
+
+tabela_final_salario <- bind_rows(tempo_na_empresa_desc,nivel_na_empresa_desc,salario_em_reais_desc)
+tabela_final_salario%>%
+  kable("html") %>%
+  kable_styling(full_width = FALSE) %>%
+  column_spec(1, bold = TRUE)
+```
+
+#### Gráficos boxplot de cada variável
+
+```{r}
+# Tamanho do gráfico
+options(repr.plot.width = 18, repr.plot.height = 10)
+
+# Variáveis numéricas
+numeric_features <- c("salario_em_reais", "tempo_na_empresa", "nivel_na_empresa")
+
+# Boxplot com facet_wrap
+p <- ggplot(melt(dados_salarios[, numeric_features]), aes(x = variable, y = value)) +
+  geom_boxplot() +
+  facet_wrap(~variable, scales = "free") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Boxplot
+print(p)
+```
+
+
+### Calculo de correlação e covariância
+
+```{r}
+cor(dados_salarios)
+corrgram(dados_salarios, lower.panel=panel.shade,
+         upper.panel=panel.pie, text.panel=panel.txt,
+         main= "Corrograma")
+```
+
+#### Interpretação da correlação
+
+A correlação entre *tempo_na_empresa e salario_em_reais* é de aproximadamente 0.91, o que indica uma forte correlação positiva. Isso sugere que há uma relação positiva entre o tempo que um funcionário passa na empresa e seu salário. Quanto maior o tempo na empresa, maior tende a ser o salário.
+
+A correlação entre *nivel_na_empresa e salario_em_reais* é muito baixa (-0.012), aproximando-se de zero. Isso sugere que não há uma relação linear forte entre o nível na empresa e o salário dos funcionários.
+
+Ambas as correlações são confirmadas pela magnitude dos coeficientes de correlação. Enquanto a correlação entre tempo_na_empresa e salario_em_reais é significativa (0.907), a correlação entre nivel_na_empresa e salario_em_reais é quase nula (-0.012).
+
+Portanto, com base nessa análise de correlação, podemos concluir que o tempo na empresa parece ter uma relação mais forte com o salário dos funcionários em comparação com o nível na empresa.
+
+
+### Modelo polinomial
+
+```{r}
+# Separar variáveis preditoras (X) e variável de resposta (y)
+X <- dados_salarios[, !names(dados_salarios) %in% c("salario_em_reais")]
+y <- dados_salarios$salario_em_reais
+
+# Dividir os dados em conjuntos de treinamento e teste
+set.seed(42) # Definir a semente aleatória para reprodução
+train_index <- createDataPartition(y, p = 0.8, list = FALSE)
+X_train <- X[train_index, ]
+X_test <- X[-train_index, ]
+y_train <- y[train_index]
+y_test <- y[-train_index]
+
+calcular_aic_bic <- function(y_true, y_pred, n_features) {
+    n <- length(y_true)
+    rss <- sum((y_true - y_pred)^2)
+    aic <- n * log(rss / n) + 2 * n_features
+    bic <- n * log(rss / n) + n_features * log(n)
+    return(list(aic = aic, bic = bic))
+}
+
+testar_modelos <- function(X_train, y_train, X_test, y_test, degrees) {
+    resultados <- data.frame(Grau = numeric(), MSE = numeric(), MAE = numeric(), R2 = numeric(), AIC = numeric(), BIC = numeric())
+
+    for (degree in degrees) {
+        poly_model <- lm(y_train ~ poly(X_train$tempo_na_empresa, degree) + poly(X_train$nivel_na_empresa, degree), data = dados_salarios)
+
+        y_pred <- predict(poly_model, newdata = X_test)
+
+        # Calcular as métricas
+        mse <- mean((y_test - y_pred)^2)
+        mae <- mean(abs(y_test - y_pred))
+        r2 <- summary(poly_model)$r.squared
+
+        # Calcular AIC e BIC
+        aic_bic <- calcular_aic_bic(y_test, y_pred, length(poly_model$coefficients))
+
+        cat("Modelo Polinomial de Grau", degree, "\n")
+        cat("MSE:", mse, "\n")
+        cat("MAE:", mae, "\n")
+        cat("R²:", r2, "\n")
+        cat("AIC:", aic_bic$aic, "\n")
+        cat("BIC:", aic_bic$bic, "\n\n")
+
+        resultados <- rbind(resultados, data.frame(Grau = degree, MSE = mse, MAE = mae, R2 = r2, AIC = aic_bic$aic, BIC = aic_bic$bic))
+        
+        # Plotar gráfico
+        grafico <- ggplot(data = data.frame(tempo_na_empresa = X_train$tempo_na_empresa, salario_em_reais = y_train), aes(x = tempo_na_empresa, y = salario_em_reais)) +
+          geom_point(color = 'blue', size = 2) +
+          geom_line(data = data.frame(tempo_na_empresa = X_train$tempo_na_empresa, salario_em_reais = predict(poly_model)), color = 'red') +
+          labs(title = paste("Modelo Polinomial de Grau", degree),
+               x = "Tempo na Empresa",
+               y = "Salário em Reais",
+               subtitle = paste("MSE:", round(mse, 2), ", MAE:", round(mae, 2), ", R²:", round(r2, 2), ", AIC:", round(aic_bic$aic, 2), ", BIC:", round(aic_bic$bic, 2))) +
+          theme_minimal()
+          
+        print(grafico)
+        
+    }
+
+    return(resultados)
+}
+
+# Definir os graus de polinômios a serem testados
+degrees <- c(2, 3, 4, 5, 6, 7)
+
+# Testar e plotar os modelos
+resultados <- testar_modelos(X_train, y_train, X_test, y_test, degrees)
+```
+
+#### Seleção do modelo polinomial e interpretação das métricas de todos os modelos
+
+Olhando para os valores de R², MSE e MAE, observamos que o modelo polinomial de grau 7 apresenta as melhores métricas, seguido pelo modelo de grau 6. No entanto, esses modelos mais complexos também têm um maior número de parâmetros, o que pode levar ao overfitting.
+
+Considerando uma abordagem equilibrada entre complexidade e desempenho, o modelo polinomial de grau 3 parece ser uma escolha sólida. Ele oferece um excelente desempenho com um R² muito alto e uma complexidade relativamente menor em comparação com os modelos de grau superior.
+
+Portanto, com base nas métricas fornecidas e considerando a complexidade do modelo, o modelo polinomial de grau 3 é a escolha preferencial.
+
+
+### Modelo Polinomial de Grau 3
+
+```{r}
+# Ajustando um modelo polinomial de grau 3
+modelo_polinomial <- lm(salario_em_reais ~ poly(tempo_na_empresa, 3) + poly(nivel_na_empresa,3), data = dados_salarios)
+
+# Resumo do modelo
+summary(modelo_polinomial)
+```
+
+
+### Análise de resíduos
+
+```{r}
+# Resíduos do modelo
+residuos_poli <- resid(modelo_polinomial)
+
+# Teste de normalidade dos resíduos (Shapiro-Wilk)
+shapiro.test(residuos_poli)
+
+# Teste de homocedasticidade (Breusch-Pagan)
+bptest(modelo_polinomial)
+
+# Gráfico de Resíduos vs. Valores Ajustados
+plot(modelo_polinomial, which=1)
+
+# Gráfico de Normalidade dos Resíduos
+plot(modelo_polinomial, which=2)
+```
+
+#### Interpretação da análise de resíduos e homocedasticidade do modelo
+
+O teste de normalidade de Shapiro-Wilk foi aplicado aos resíduos, resultando em um p-value é menor que 0.05, indicando que há evidências estatisticamente significativas para rejeitar a hipótese nula de normalidade dos resíduos. Isso sugere que os resíduos não seguem uma distribuição normal.
+
+NO teste de Breusch-Pagan studentized o p-valor menor que o nível de significância (0.05), o que sugere que há evidências para rejeitar a hipótese nula de homocedasticidade.
+
+No gráfico Resíduals vc Fitted, uma discrepância notável é observada entre as pernas do padrão em forma de U. A perna do U à direita é consideravelmente mais longa do que a da esquerda. Isso sugere que os resíduos estão apresentando uma variabilidade crescente à medida que os valores ajustados aumentam, indicando a possibilidade de heterocedasticidade.
+
+No gráfico Q-Q, observa-se que os pontos residuais estão concentrados em uma linha crescente na diagonal, com leves curvas. Essa tendência sugere que os resíduos podem não estar seguindo uma distribuição normal perfeitamente, mas sim uma distribuição levemente distorcida, o que pode indicar a presença de algum tipo de não-linearidade nos dados.
+
+Em resumo, com base na análise de resíduos, há evidências de que o Modelo Polinomial de Grau 2 pode não ser a melhor escolha para modelar os dados. A presença de resíduos não normalmente distribuídos e possivelmente heterocedásticos sugere que o modelo pode não estar capturando adequadamente a estrutura subjacente dos dados. Portanto, podem ser necessários ajustes adicionais no modelo ou considerar outras abordagens de modelagem para obter uma representação mais precisa dos dados.
+
+
+### Análise de multicolinearidade
+
+```{r}
+# Calcular o VIF
+vif(modelo_polinomial)
+```
+
+#### Interpretação do resultado de multicolinearidade do modelo
+
+Os valores GVIF obtidos (próximos de 1) indicam que não há preocupações significativas com multicolinearidade entre as variáveis tempo_na_empresa e nivel_na_empresa. Isso sugere que as variáveis independentes estão bem comportadas e que não há evidências substanciais de multicolinearidade problemática no modelo.
+
+Valores de VIF abaixo de 5 é considerado aceitável; valores de VIF entre 5 e 10 são considerados preocupantes; Valores de VIF acima de 10 indicam alta multicolinearidade.
+
+
+### Análise de outlier
+
+```{r}
+#outliers modelo completo
+teste_outliers_poli <- outlierTest(modelo_polinomial)
+teste_outliers_poli
+```
+
+#### Interpretação da análise de outliers e seu impacto no modelo
+
+Com base nos resultados do teste R-Student, parece que há pelo menos um ponto de dados que está significativamente distante da tendência geral dos resíduos, o que sugere a presença de outliers no modelo. Esses outliers podem ter um impacto considerável no ajuste do modelo e devem ser investigados mais detalhadamente.
+
+Este resultado corrobora com a análise de boxplots realizada na sessão de análise descritiva, onde observamos possíveis outliers na variável salario_em_reais. Esses outliers representam valores extremos que podem distorcer as análises estatísticas e influenciar os resultados do modelo. Portanto, é importante considerar se esses outliers são representativos de valores reais ou se são resultado de erros de medição ou outros problemas nos dados.
+
+Dependendo da natureza dos outliers, pode ser necessário tomar medidas corretivas, como remover os pontos de dados problemáticos ou considerar modelos mais robustos à presença de outliers. Esta análise destaca a importância de uma abordagem cuidadosa na identificação e tratamento de outliers para garantir a validade e a robustez dos resultados do modelo.
+
+
+### Conclusão final Questão 2
+
+Com base nessas conclusões, é evidente que o Modelo Polinomial de Grau 3 pode não ser a melhor escolha para modelar os dados. A presença de resíduos não normalmente distribuídos, possivelmente heterocedásticos e a possível presença de outliers sugerem que o modelo pode não estar capturando adequadamente a estrutura subjacente dos dados. Seria prudente considerar ajustes adicionais no modelo ou explorar outras abordagens de modelagem para melhorar sua precisão e robustez.
+
+
+Autora: Clara Cabral Lisboa
